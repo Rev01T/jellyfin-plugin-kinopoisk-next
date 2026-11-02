@@ -14,6 +14,10 @@ namespace KinopoiskUnofficialInfo.ApiClient
         private readonly ILogger<KinopoiskApiClient> _logger;
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly Client _apiClient;
+        private static readonly TimeSpan QuotaCooldown = TimeSpan.FromHours(1);
+        private readonly object _quotaLock = new object();
+        private DateTimeOffset _quotaBlockedUntil = DateTimeOffset.MinValue;
+        private string _quotaExceededResponse = string.Empty;
 
         public KinopoiskApiClient(string apiToken, ILogger<KinopoiskApiClient> logger, IHttpClientFactory httpClientFactory)
         {
@@ -33,16 +37,47 @@ namespace KinopoiskUnofficialInfo.ApiClient
 
         private async Task<T> Invoke<T>(Func<CancellationToken, Task<T>> method, CancellationToken? ct, [CallerMemberName] string memberName = "")
         {
+            ApiException quotaException = null;
+            lock (_quotaLock)
+            {
+                if (DateTimeOffset.UtcNow < _quotaBlockedUntil)
+                {
+                    quotaException = new ApiException("Kinopoisk API daily request limit exceeded.", 402, _quotaExceededResponse, new Dictionary<string, IEnumerable<string>>(), null);
+                }
+            }
+            if (quotaException != null)
+                throw quotaException;
             try
             {
                 _logger.LogDebug($"{memberName} request starting...");
-                var res = await method.Invoke(ct ?? CancellationToken.None);
+                var res = await method.Invoke(ct ?? CancellationToken.None).ConfigureAwait(false);
                 _logger.LogDebug($"{memberName} request complete successfully");
                 return res;
             }
             catch (ApiException e)
             {
-                _logger.LogError($"Received non-success result status code {e.StatusCode} from Kinopoisk API, response content is:\n{e.Response}");
+                if (e.StatusCode == 402)
+                {
+                    var shouldLog = false;
+                    DateTimeOffset blockedUntil = DateTimeOffset.MinValue;
+                    var now = DateTimeOffset.UtcNow;
+                    lock (_quotaLock)
+                    {
+                        if (now >= _quotaBlockedUntil)
+                        {
+                            _quotaBlockedUntil = now.Add(QuotaCooldown);
+                            _quotaExceededResponse = e.Response ?? string.Empty;
+                            blockedUntil = _quotaBlockedUntil;
+                            shouldLog = true;
+                        }
+                    }
+                    if (shouldLog)
+                        _logger.LogWarning("Kinopoisk API quota exhausted. Requests are paused until {BlockedUntil:u}", blockedUntil);
+                }
+                else
+                {
+                    _logger.LogError("Received non-success result status code {StatusCode} from Kinopoisk API, response content is: {Response}", e.StatusCode, e.Response);
+                }
                 throw;
             }
         }
