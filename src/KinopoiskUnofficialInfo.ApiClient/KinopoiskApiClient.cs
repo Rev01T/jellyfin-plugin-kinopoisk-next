@@ -21,17 +21,13 @@ namespace KinopoiskUnofficialInfo.ApiClient
 
         public KinopoiskApiClient(string apiToken, ILogger<KinopoiskApiClient> logger, IHttpClientFactory httpClientFactory)
         {
-            if (string.IsNullOrEmpty(apiToken))
-            {
-                throw new System.ArgumentException($"'{nameof(apiToken)}' cannot be null or empty.", nameof(apiToken));
-            }
-
-            _apiToken = apiToken;
+            _apiToken = apiToken ?? string.Empty;
             _logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
             _httpClientFactory = httpClientFactory ?? throw new System.ArgumentNullException(nameof(httpClientFactory));
 
             var httpClient = _httpClientFactory.CreateClient();
-            httpClient.DefaultRequestHeaders.Add("X-API-KEY", _apiToken);
+            if (!string.IsNullOrWhiteSpace(_apiToken))
+                httpClient.DefaultRequestHeaders.Add("X-API-KEY", _apiToken);
             _apiClient = new Client(httpClient);
         }
 
