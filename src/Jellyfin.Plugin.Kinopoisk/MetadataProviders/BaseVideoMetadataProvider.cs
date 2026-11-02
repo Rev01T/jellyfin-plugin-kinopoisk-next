@@ -46,6 +46,8 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
 
             var film = await _apiClient.GetSingleFilm(kinopoiskId, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
+            if (film is null)
+                return result;
 
             result.Item = ConvertResponseToItem(film);
             if (result.Item != null)
@@ -60,7 +62,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
 
             var trailers = await _apiClient.GetTrailers(kinopoiskId, cancellationToken);
             var remoteTrailers = trailers.ToMediaUrls();
-            if (remoteTrailers is not null)
+            if (remoteTrailers is not null && result.Item is not null)
                 result.Item.RemoteTrailers = remoteTrailers;
 
             return result;
