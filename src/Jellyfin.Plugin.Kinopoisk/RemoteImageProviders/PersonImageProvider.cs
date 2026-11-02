@@ -40,7 +40,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             var person = await _apiClient.GetPerson(kinopoiskId, cancellationToken);
 
             var res = new[] { person.ToRemoteImageInfo() };
-            return await FilterEmptyImages(res);
+            return await FilterEmptyImages(res, cancellationToken);
         }
 
         public override IEnumerable<ImageType> GetSupportedImages(BaseItem item)
