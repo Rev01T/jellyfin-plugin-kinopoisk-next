@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "port/**"
+      - "master"
   pull_request:
   workflow_dispatch:
 
