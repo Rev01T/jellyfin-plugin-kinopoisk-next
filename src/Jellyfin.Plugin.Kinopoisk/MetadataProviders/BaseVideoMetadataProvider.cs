@@ -56,7 +56,8 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             var staff = await _apiClient.GetStaff(kinopoiskId, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
 
-            var sanitizedPersons = await SanitizeEmptyImagePersonInfos(staff.ToPersonInfos(), cancellationToken);
+            var personInfos = staff?.ToPersonInfos() ?? Enumerable.Empty<PersonInfo>();
+            var sanitizedPersons = await SanitizeEmptyImagePersonInfos(personInfos, cancellationToken);
             foreach (var item in sanitizedPersons)
                 result.AddPerson(item);
 
