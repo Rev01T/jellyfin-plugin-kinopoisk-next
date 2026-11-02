@@ -1,32 +1,49 @@
-# jellyfin-plugin-kinopoisk
+# КиноПоиск Next для Jellyfin 12
 
-Fetches metadata from https://www.kinopoisk.ru/. This site is popular in the Russian-speaking community and contains almost no English-language information, so further description will be in Russian.
+Плагин получает метаданные фильмов и сериалов из [КиноПоиска](https://www.kinopoisk.ru/) через Kinopoisk Unofficial API.
+
+## Совместимость
+
+- Jellyfin Server **12.1.x**
+- .NET **10**
+- Этот форк предназначен только для Jellyfin 12.x. Сборки для Jellyfin 10.x не поддерживаются.
 
 ## Установка
 
-Администрирование - Панель - Расширенное - Плагины - вкладка Репозитории - добавить адрес https://raw.githubusercontent.com/LinFor/jellyfin-plugin-kinopoisk/master/dist/manifest.json.
+После публикации стабильного релиза добавьте репозиторий плагина в Jellyfin:
 
-После этого на вкладке Каталог найти "КиноПоиск" (раздел Метаданные) и установить.
+`https://raw.githubusercontent.com/Rev01T/jellyfin-plugin-kinopoisk-next/master/dist/manifest.json`
 
-Альтернатива для Emby - [luzmane/emby.kinopoisk.ru](https://github.com/luzmane/emby.kinopoisk.ru)
+Затем откройте **Панель управления → Плагины → Каталог**, найдите «КиноПоиск» и установите плагин. Для ручной установки используйте ZIP из раздела Releases, соответствующий Jellyfin 12.
 
-## Настройка
+## Настройка API
 
-Параметры плагина искать в: Администрирование - Панель - Расширенное - Плагины - вкладка "Мои плагины" - КиноПоиск - "три точки" - Параметры
+Для работы нужен **личный API-токен** от [kinopoiskapiunofficial.tech](https://kinopoiskapiunofficial.tech/). После установки откройте **Панель управления → Плагины → Мои плагины → КиноПоиск → Настройки** и укажите токен.
 
-Если плагин не работает или работает плохо - попробуйте зарегистрировать (и указать в параметрах) свой собственный ApiToken (на сайте https://kinopoiskapiunofficial.tech). По-умолчанию прописан общий, ограничение порядка 10 запросов/сек - для общего ApiToken быстро заканчивается.
+В репозитории больше не задаётся общий токен: общий ключ быстро исчерпывает лимит запросов и не должен использоваться как общий ключ для всех установок.
 
-## Использование
+## Возможности
 
-Поддерживаются:
-- Фильмы
-- Сериалы
+Поддерживаются фильмы и сериалы. Плагин получает:
+- рейтинг и описание;
+- постеры и фоны;
+- актёров и другие персоналии;
+- трейлеры YouTube.
 
-На данный момент грузятся:
-- Рейтинг
-- Описание
-- Постеры и задники
-- Актёры
-- Трейлеры (только те, что лежат на ютубе - Jellyfin-Web не умеет играть трейлеры, лежащие на самом КиноПоиске)
+Для точного сопоставления укажите ID КиноПоиска в имени файла или папки: `kp-12345` или `kp12345`. Также используется поиск по названию, году выпуска и IMDb ID.
 
-Плагин будет пытаться найти в имени файла (для фильмов) или имени корневой папки (для сериалов) паттерн вида "kp-12345" или "kp12345", где число - id фильма на сайте КиноПоиск.
+## Сборка из исходников
+
+Требуется .NET 10 SDK.
+
+```bash
+dotnet restore ./src/Jellyfin.Plugin.Kinopoisk.sln
+dotnet build -c Release ./src/Jellyfin.Plugin.Kinopoisk.sln
+dotnet test -c Release ./src/Jellyfin.Plugin.Kinopoisk.sln
+```
+
+Артефакты сборки: `Jellyfin.Plugin.Kinopoisk.dll` и `KinopoiskUnofficialInfo.ApiClient.dll`.
+
+## Разработка
+
+Порт Jellyfin 12 ведётся в отдельной ветке. Перед публикацией релиза должны успешно завершиться сборка и тесты в GitHub Actions.
