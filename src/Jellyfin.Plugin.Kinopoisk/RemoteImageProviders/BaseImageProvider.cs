@@ -37,10 +37,16 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
 
         protected async Task<IEnumerable<RemoteImageInfo>> FilterEmptyImages(IEnumerable<RemoteImageInfo> images, CancellationToken cancellationToken)
         {
+            var candidates = (images ?? Enumerable.Empty<RemoteImageInfo>())
+                .Where(image => image != null && !string.IsNullOrWhiteSpace(image.Url))
+                .ToArray();
+            if (candidates.Length == 0)
+                return Enumerable.Empty<RemoteImageInfo>();
+
             using var semaphore = new SemaphoreSlim(MaxConcurrentImageChecks);
             var sanitizer = new RemoteImageUrlSanitizer(_httpClientFactory.CreateClient("KinopoiskImageSanitizer"));
 
-            var tasks = images.Select(async image =>
+            var tasks = candidates.Select(async image =>
             {
                 await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
                 try
