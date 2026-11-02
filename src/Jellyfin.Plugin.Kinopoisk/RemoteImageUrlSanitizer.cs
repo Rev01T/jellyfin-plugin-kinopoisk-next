@@ -35,26 +35,49 @@ namespace Jellyfin.Plugin.Kinopoisk
                     return null;
 
                 using var request = new HttpRequestMessage(HttpMethod.Get, currentUri);
-                using var response = await _httpClient.SendAsync(
-                    request,
-                    HttpCompletionOption.ResponseHeadersRead,
-                    cancellationToken).ConfigureAwait(false);
-
-                if ((int)response.StatusCode is >= 200 and <= 299)
-                    return currentUri.AbsoluteUri;
-
-                var location = response.Headers.Location;
-                if (location is null)
+                HttpResponseMessage response;
+                try
+                {
+                    response = await _httpClient.SendAsync(
+                        request,
+                        HttpCompletionOption.ResponseHeadersRead,
+                        cancellationToken).ConfigureAwait(false);
+                }
+                catch (HttpRequestException)
+                {
                     return null;
-
-                var nextUri = location.IsAbsoluteUri ? location : new Uri(currentUri, location);
-                if (nextUri.Scheme != Uri.UriSchemeHttp && nextUri.Scheme != Uri.UriSchemeHttps)
+                }
+                catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
                     return null;
+                }
 
-                if (nextUri.AbsoluteUri.Contains("no-poster", StringComparison.OrdinalIgnoreCase))
-                    return null;
+                using (response)
+                {
+                    if ((int)response.StatusCode is >= 200 and <= 299)
+                        return currentUri.AbsoluteUri;
 
-                currentUri = nextUri;
+                    var location = response.Headers.Location;
+                    if (location is null)
+                        return null;
+
+                    Uri nextUri;
+                    try
+                    {
+                        nextUri = location.IsAbsoluteUri ? location : new Uri(currentUri, location);
+                    }
+                    catch (UriFormatException)
+                    {
+                        return null;
+                    }
+                    if (nextUri.Scheme != Uri.UriSchemeHttp && nextUri.Scheme != Uri.UriSchemeHttps)
+                        return null;
+
+                    if (nextUri.AbsoluteUri.Contains("no-poster", StringComparison.OrdinalIgnoreCase))
+                        return null;
+
+                    currentUri = nextUri;
+                }
             }
 
             return null;
