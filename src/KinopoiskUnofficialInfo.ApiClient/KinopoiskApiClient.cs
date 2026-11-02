@@ -23,6 +23,8 @@ namespace KinopoiskUnofficialInfo.ApiClient
         {
             _apiToken = apiToken ?? string.Empty;
             _logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
+            if (string.IsNullOrWhiteSpace(_apiToken))
+                _logger.LogWarning("No Kinopoisk API token is configured. Set a personal token in the plugin settings.");
             _httpClientFactory = httpClientFactory ?? throw new System.ArgumentNullException(nameof(httpClientFactory));
 
             var httpClient = _httpClientFactory.CreateClient();
