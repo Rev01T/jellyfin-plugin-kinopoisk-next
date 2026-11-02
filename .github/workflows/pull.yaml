@@ -1,33 +1,41 @@
-name: Pull Request Check
+name: Jellyfin 12.1 build and test
 
 on:
+  push:
+    branches:
+      - "port/**"
   pull_request:
-
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
+      - name: Checkout
+        uses: actions/checkout@v6
 
-    - name: Setup .NET 9.0
-      uses: actions/setup-dotnet@v5
-      with:
-        dotnet-version: 9.0.x
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
 
-    - name: Build project
-      run: dotnet build --configuration Release --property:Version=1.0.0.0 ./src
+      - name: Restore
+        run: dotnet restore ./src/Jellyfin.Plugin.Kinopoisk.sln
 
-    - name: Test project
-      run: dotnet test --configuration Release ./src
+      - name: Build
+        run: dotnet build --configuration Release --no-restore --property:Version=12.1.0.0 ./src/Jellyfin.Plugin.Kinopoisk.sln
 
-    - name: Publish artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: my-artifact
-        path: |
-          ./src/Jellyfin.Plugin.Kinopoisk/bin/Release/net9.0/Jellyfin.Plugin.Kinopoisk.dll
-          ./src/KinopoiskUnofficialInfo.ApiClient/bin/Release/net9.0/KinopoiskUnofficialInfo.ApiClient.dll
+      - name: Test
+        run: dotnet test --configuration Release --no-build ./src/Jellyfin.Plugin.Kinopoisk.sln
+
+      - name: Upload plugin assemblies
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kinopoisk-jellyfin-12.1.0
+          path: |
+            ./src/Jellyfin.Plugin.Kinopoisk/bin/Release/net10.0/Jellyfin.Plugin.Kinopoisk.dll
+            ./src/KinopoiskUnofficialInfo.ApiClient/bin/Release/net10.0/KinopoiskUnofficialInfo.ApiClient.dll
