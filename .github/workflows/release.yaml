@@ -79,8 +79,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ env.VERSION }}
-          target_commitish: ${{ github.sha }}
+          tag_name: v${{ inputs.version }}
+          target_commitish: ${{ github.ref_name }}
           body: ${{ steps.changelog.outputs.changelog }}
           files: ${{ env.RELEASE_FILE }}
 
