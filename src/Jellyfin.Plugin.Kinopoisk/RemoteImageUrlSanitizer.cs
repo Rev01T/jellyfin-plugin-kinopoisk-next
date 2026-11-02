@@ -43,9 +43,11 @@ namespace Jellyfin.Plugin.Kinopoisk
                 if ((int)response.StatusCode is >= 200 and <= 299)
                     return currentUri.AbsoluteUri;
 
-                if (!response.Headers.Location.IsAbsoluteUriOrResolvable(currentUri, out var nextUri))
+                var location = response.Headers.Location;
+                if (location is null)
                     return null;
 
+                var nextUri = location.IsAbsoluteUri ? location : new Uri(currentUri, location);
                 if (nextUri.Scheme != Uri.UriSchemeHttp && nextUri.Scheme != Uri.UriSchemeHttps)
                     return null;
 
@@ -59,16 +61,4 @@ namespace Jellyfin.Plugin.Kinopoisk
         }
     }
 
-    internal static class UriExtensions
-    {
-        public static bool IsAbsoluteUriOrResolvable(this Uri location, Uri baseUri, out Uri resolved)
-        {
-            resolved = null;
-            if (location == null)
-                return false;
-
-            resolved = location.IsAbsoluteUri ? location : new Uri(baseUri, location);
-            return true;
-        }
-    }
 }
