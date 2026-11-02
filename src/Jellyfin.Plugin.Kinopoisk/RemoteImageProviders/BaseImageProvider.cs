@@ -14,6 +14,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
 {
     public abstract class BaseImageProvider : IRemoteImageProvider
     {
+        private const int MaxConcurrentImageChecks = 8;
         private readonly IHttpClientFactory _httpClientFactory;
 
         protected BaseImageProvider(IHttpClientFactory httpClientFactory)
@@ -34,20 +35,31 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
 
         public abstract IEnumerable<ImageType> GetSupportedImages(BaseItem item);
 
-        protected async Task<IEnumerable<RemoteImageInfo>> FilterEmptyImages(IEnumerable<RemoteImageInfo> images)
+        protected async Task<IEnumerable<RemoteImageInfo>> FilterEmptyImages(IEnumerable<RemoteImageInfo> images, CancellationToken cancellationToken)
         {
-            using var httpClient = new HttpClient(new HttpClientHandler() { AllowAutoRedirect = false }, true);
-            var sanitizer = new RemoteImageUrlSanitizer(httpClient);
-            var res = await Task.WhenAll(images.Select(async i => {
-                var sanitizedUrl = await sanitizer.SanitizeRemoteImageUrl(i.Url);
-                if (string.IsNullOrEmpty(sanitizedUrl))
-                    return null;
+            using var semaphore = new SemaphoreSlim(MaxConcurrentImageChecks);
+            var sanitizer = new RemoteImageUrlSanitizer(_httpClientFactory.CreateClient("KinopoiskImageSanitizer"));
 
-                i.Url = sanitizedUrl;
-                return i;
-            }));
+            var tasks = images.Select(async image =>
+            {
+                await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    var sanitizedUrl = await sanitizer.SanitizeRemoteImageUrl(image.Url, cancellationToken).ConfigureAwait(false);
+                    if (string.IsNullOrWhiteSpace(sanitizedUrl))
+                        return null;
 
-            return res.Where(i => i != null).ToArray();
+                    image.Url = sanitizedUrl;
+                    return image;
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            });
+
+            var sanitized = await Task.WhenAll(tasks).ConfigureAwait(false);
+            return sanitized.Where(image => image != null).ToArray();
         }
     }
 }
