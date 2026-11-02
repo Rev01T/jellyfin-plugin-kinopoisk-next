@@ -74,11 +74,49 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             if (searchInfo.TryGetProviderId(Constants.ProviderId, out var kinopoiskIdStr)
                 && int.TryParse(kinopoiskIdStr, out var kinopoiskId))
             {
-                var singleResult = (await _apiClient.GetSingleFilm(kinopoiskId, cancellationToken)).ToRemoteSearchResult();
-                return Enumerable.Repeat(singleResult, 1);
+                var providerIdResult = (await _apiClient.GetSingleFilm(kinopoiskId, cancellationToken))
+                    .ToRemoteSearchResult();
+                return providerIdResult is null
+                    ? Enumerable.Empty<RemoteSearchResult>()
+                    : new[] { providerIdResult };
             }
 
-            return (await _apiClient.SearchByKeyword(searchInfo.Name, cancellationToken: cancellationToken)).ToRemoteSearchResults(_logger);
+            // Accept a plain Kinopoisk film ID (e.g. 687670) as well as the
+            // optional filename-style forms kp687670 and kp-687670.
+            if (TryParseKinopoiskId(searchInfo.Name, out kinopoiskId))
+            {
+                var idResult = (await _apiClient.GetSingleFilm(kinopoiskId, cancellationToken))
+                    .ToRemoteSearchResult();
+                return idResult is null
+                    ? Enumerable.Empty<RemoteSearchResult>()
+                    : new[] { idResult };
+            }
+
+            if (string.IsNullOrWhiteSpace(searchInfo.Name))
+                return Enumerable.Empty<RemoteSearchResult>();
+
+            var searchResult = await _apiClient.SearchByKeyword(
+                searchInfo.Name,
+                cancellationToken: cancellationToken);
+            return searchResult.ToRemoteSearchResults(_logger);
+        }
+
+        private static bool TryParseKinopoiskId(string value, out int kinopoiskId)
+        {
+            kinopoiskId = 0;
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            var candidate = value.Trim();
+            if (candidate.StartsWith("kp-", System.StringComparison.OrdinalIgnoreCase))
+                candidate = candidate.Substring(3);
+            else if (candidate.StartsWith("kp", System.StringComparison.OrdinalIgnoreCase))
+                candidate = candidate.Substring(2);
+
+            return candidate.Length > 0
+                && candidate.All(char.IsDigit)
+                && int.TryParse(candidate, out kinopoiskId)
+                && kinopoiskId > 0;
         }
 
         protected async Task<IEnumerable<PersonInfo>> SanitizeEmptyImagePersonInfos(IEnumerable<PersonInfo> images, CancellationToken cancellationToken)
