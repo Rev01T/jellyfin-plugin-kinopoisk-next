@@ -1,10 +1,13 @@
 using System.Net.Http;
 using Jellyfin.Plugin.Kinopoisk.ProviderIdResolvers;
+using Jellyfin.Plugin.Kinopoisk.MetadataProviders;
+using Jellyfin.Plugin.Kinopoisk.Model;
 using KinopoiskUnofficialInfo.ApiClient;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Providers;
+using MediaBrowser.Model.Providers;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -46,6 +49,18 @@ namespace Jellyfin.Plugin.Kinopoisk
             serviceCollection.AddSingleton<IProviderIdResolver<SeriesInfo>, VideoResolver<SeriesInfo>>();
             serviceCollection.AddSingleton<IProviderIdResolver<PersonLookupInfo>, CommonResolver<PersonLookupInfo>>();
             serviceCollection.AddSingleton<IProviderIdResolver<BaseItem>, CommonResolver<BaseItem>>();
+
+            // Register metadata providers explicitly. Jellyfin resolves providers
+            // from DI; loading the plugin assembly alone does not activate them.
+            serviceCollection.AddSingleton<IMetadataProvider, MovieMetadataProvider>();
+            serviceCollection.AddSingleton<IMetadataProvider, SeriesMetadataProvider>();
+            serviceCollection.AddSingleton<IMetadataProvider, PersonMetadataProvider>();
+
+            serviceCollection.AddSingleton<IRemoteImageProvider, VideoImageProvider>();
+            serviceCollection.AddSingleton<IRemoteImageProvider, PersonImageProvider>();
+
+            serviceCollection.AddSingleton<IExternalId, KinopoiskExternalId>();
+            serviceCollection.AddSingleton<IExternalUrlProvider, KinopoiskExternalUrlProvider>();
         }
     }
 }
