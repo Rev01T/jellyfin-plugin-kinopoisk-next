@@ -18,6 +18,9 @@ namespace KinopoiskUnofficialInfo.ApiClient
         private readonly object _quotaLock = new object();
         private DateTimeOffset _quotaBlockedUntil = DateTimeOffset.MinValue;
         private string _quotaExceededResponse = string.Empty;
+        private static readonly TimeSpan MinimumRequestInterval = TimeSpan.FromMilliseconds(110);
+        private readonly SemaphoreSlim _requestStartLock = new SemaphoreSlim(1, 1);
+        private DateTimeOffset _nextRequestAt = DateTimeOffset.MinValue;
 
         public KinopoiskApiClient(string apiToken, ILogger<KinopoiskApiClient> logger, IHttpClientFactory httpClientFactory)
         {
@@ -47,8 +50,10 @@ namespace KinopoiskUnofficialInfo.ApiClient
                 throw quotaException;
             try
             {
-                _logger.LogDebug($"{memberName} request starting...");
-                var res = await method.Invoke(ct ?? CancellationToken.None).ConfigureAwait(false);
+                var requestCancellation = ct ?? CancellationToken.None;
+                await WaitForRequestSlot(requestCancellation).ConfigureAwait(false);
+                _logger.LogDebug("{ApiMethod} request starting...", memberName);
+                var res = await method.Invoke(requestCancellation).ConfigureAwait(false);
                 _logger.LogDebug($"{memberName} request complete successfully");
                 return res;
             }
@@ -80,6 +85,21 @@ namespace KinopoiskUnofficialInfo.ApiClient
             }
         }
 
+        private async Task WaitForRequestSlot(CancellationToken cancellationToken)
+        {
+            await _requestStartLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                var delay = _nextRequestAt - DateTimeOffset.UtcNow;
+                if (delay > TimeSpan.Zero)
+                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                _nextRequestAt = DateTimeOffset.UtcNow.Add(MinimumRequestInterval);
+            }
+            finally
+            {
+                _requestStartLock.Release();
+            }
+        }
         public Task<Film> GetSingleFilm(int filmId, CancellationToken? cancellationToken = null)
             => Invoke((ct) => _apiClient.FilmsAsync(filmId, ct), cancellationToken);
 
