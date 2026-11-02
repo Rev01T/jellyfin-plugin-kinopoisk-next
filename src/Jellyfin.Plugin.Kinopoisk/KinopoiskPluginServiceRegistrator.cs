@@ -18,6 +18,19 @@ namespace Jellyfin.Plugin.Kinopoisk
     {
         public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
         {
+            serviceCollection.AddHttpClient("KinopoiskApiClient", client =>
+            {
+                client.Timeout = System.TimeSpan.FromSeconds(20);
+            });
+
+            serviceCollection.AddHttpClient("KinopoiskImageSanitizer", client =>
+            {
+                client.Timeout = System.TimeSpan.FromSeconds(10);
+            }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                AllowAutoRedirect = false
+            });
+
             serviceCollection.AddSingleton((sp) => new KinopoiskApiClient(
                 Plugin.Instance.Configuration.ApiToken,
                 sp.GetRequiredService<ILogger<KinopoiskApiClient>>(),

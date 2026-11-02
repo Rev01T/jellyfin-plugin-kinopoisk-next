@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
-using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
@@ -28,59 +28,44 @@ namespace KinopoiskUnofficialInfo.ApiClient
         }
 
         public Task<PersonResponse> GetPerson(int personId, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(GetPerson), personId), c => c.GetPerson(personId, cancellationToken));
+            => TryGetValue(GenerateKey(nameof(GetPerson), personId), c => c.GetPerson(personId, cancellationToken), () => null);
 
         public Task<Film> GetSingleFilm(int filmId, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(GetSingleFilm), filmId), c => c.GetSingleFilm(filmId, cancellationToken));
+            => TryGetValue(GenerateKey(nameof(GetSingleFilm), filmId), c => c.GetSingleFilm(filmId, cancellationToken), () => null);
 
         public Task<ICollection<StaffResponse>> GetStaff(int filmId, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(GetStaff), filmId), c => c.GetStaff(filmId, cancellationToken));
+            => TryGetValue(GenerateKey(nameof(GetStaff), filmId), c => c.GetStaff(filmId, cancellationToken), () => Array.Empty<StaffResponse>());
 
         public Task<VideoResponse> GetTrailers(int filmId, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(GetTrailers), filmId), c => c.GetTrailers(filmId, cancellationToken));
+            => TryGetValue(GenerateKey(nameof(GetTrailers), filmId), c => c.GetTrailers(filmId, cancellationToken), () => new VideoResponse());
 
         public Task<FilmSearchResponse> SearchByKeyword(string keyword, int page = 1, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(SearchByKeyword), keyword, page), c => c.SearchByKeyword(keyword, page, cancellationToken));
+            => TryGetValue(GenerateKey(nameof(SearchByKeyword), keyword, page), c => c.SearchByKeyword(keyword, page, cancellationToken), () => new FilmSearchResponse());
 
         private static string GenerateKey(params object[] objects)
         {
-            var key = string.Empty;
-
-            foreach (var obj in objects)
-            {
-                var objType = obj.GetType();
-                if (objType.IsPrimitive || objType == typeof(string))
-                {
-                    key += obj + ";";
-                }
-                else
-                {
-                    foreach (PropertyInfo propertyInfo in objType.GetProperties())
-                    {
-                        var currentValue = propertyInfo.GetValue(obj, null);
-                        if (currentValue == null)
-                        {
-                            continue;
-                        }
-
-                        key += propertyInfo.Name + "=" + currentValue + ";";
-                    }
-                }
-            }
-
-            return key;
+            var key = new StringBuilder();
+            foreach (var value in objects)
+                key.Append(value?.ToString() ?? "<null>").Append(';');
+            return key.ToString();
         }
 
-        private Task<T> TryGetValue<T>(string key, Func<IKinopoiskApiClient, Task<T>> resultFactory)
+        private Task<T> TryGetValue<T>(string key, Func<IKinopoiskApiClient, Task<T>> resultFactory, Func<T> quotaFallbackFactory)
         {
             return _cache.GetOrCreateAsync(key, async entry =>
             {
                 _logger.LogDebug($"Entry '{key}' not found in cache, requesting from server");
-                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1);
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
 
-                var result = await resultFactory.Invoke(_innerClient).ConfigureAwait(false);
-
-                return result;
+                try
+                {
+                    return await resultFactory.Invoke(_innerClient).ConfigureAwait(false);
+                }
+                catch (ApiException exception) when (exception.StatusCode == 402)
+                {
+                    _logger.LogWarning("Kinopoisk API quota exhausted; returning an empty result for {CacheKey}", key);
+                    return quotaFallbackFactory();
+                }
             });
         }
     }

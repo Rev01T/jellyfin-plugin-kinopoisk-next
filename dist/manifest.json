@@ -4,8 +4,8 @@
     "guid": "33e6d249-648f-44cd-a9ce-497be06c08df",
     "name": "КиноПоиск",
     "overview": "Информация о фильмах и сериалах с КиноПоиска",
-    "owner": "LinFor & skrashevich",
-    "description": "Загружает рейтинг, описания, актёров, трейлеры и т.д. с сайта КиноПоиск. Может потребоваться зарегистрировать свой ApiToken, см. информацию в параметрах плагина. Для точного распознавания рекомендуется указывать id фильма с сайта КиноПоиск в имени файла в формате kp-12345 или kp12345. Подробнее см. https://github.com/LinFor/jellyfin-plugin-kinopoisk/blob/master/README.md\n",
+    "owner": "Rev01T (fork of LinFor)",
+    "description": "Метаданные фильмов и сериалов из КиноПоиска. Этот форк предназначен для Jellyfin 12.x (.NET 10). Требуется личный API-токен; см. README: https://github.com/Rev01T/jellyfin-plugin-kinopoisk-next/blob/master/README.md",
     "imageUrl": "https://kinopoisk.userecho.com/s/attachments/28876/0/1/25f8c0315e6ccb2aa6c2642e48f2c9e9.png",
     "versions": [
       {
