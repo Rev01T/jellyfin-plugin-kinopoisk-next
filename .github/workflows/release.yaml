@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Plugin version (for example 12.1.0.0)"
+        description: "Plugin version (for example 12.1.0.3)"
         required: true
         type: string
 
@@ -30,14 +30,28 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Validate version
+      - name: Validate version and changelog
         run: |
           VERSION="${{ inputs.version }}"
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Version must use four numeric components (for example 12.1.0.0)."
+            echo "Version must use four numeric components (for example 12.1.0.3)."
+            exit 1
+          fi
+          CHANGELOG=$(awk -v version="$VERSION" '
+            $0 ~ "^## \\[v?" version "\\]" { found=1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md)
+          if [ -z "$(echo "$CHANGELOG" | tr -d '[:space:]')" ]; then
+            echo "CHANGELOG.md must contain a non-empty section for version $VERSION."
             exit 1
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          {
+            echo "CHANGELOG<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
 
       - name: Restore
         run: dotnet restore ./src/Jellyfin.Plugin.Kinopoisk.sln
@@ -59,35 +73,18 @@ jobs:
           echo "RELEASE_FILENAME=$RELEASE_FILENAME" >> "$GITHUB_ENV"
           echo "RELEASE_FILE=$RELEASE_FILE" >> "$GITHUB_ENV"
 
-      - name: Extract changelog
-        id: changelog
-        run: |
-          CHANGELOG=$(awk -v version="$VERSION" '
-            $0 ~ "^## \\[v?" version "\\]" { found=1; next }
-            found && /^## \[/ { exit }
-            found { print }
-          ' CHANGELOG.md)
-          if [ -z "$(echo "$CHANGELOG" | tr -d '[:space:]')" ]; then
-            CHANGELOG="Jellyfin 12.1.0 compatibility, built for .NET 10."
-          fi
-          {
-            echo "changelog<<EOF"
-            echo "$CHANGELOG"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ inputs.version }}
           target_commitish: ${{ github.ref_name }}
-          body: ${{ steps.changelog.outputs.changelog }}
+          body: ${{ env.CHANGELOG }}
           files: dist/kinopoisk/jellyfin-plugin-kinopoisk_${{ inputs.version }}.zip
 
       - name: Update manifest
         run: |
           HASH=$(md5sum "${RELEASE_FILE}" | cut -d' ' -f1)
-          CHANGELOG_JSON=$(jq -Rs . <<< "${{ steps.changelog.outputs.changelog }}")
+          CHANGELOG_JSON=$(jq -Rs . <<< "${CHANGELOG}")
           SOURCE_URL="${{ github.server_url }}/${{ github.repository }}/releases/download/v${VERSION}/${RELEASE_FILENAME}"
           jq --arg version "$VERSION" \
              --arg hash "$HASH" \

@@ -4,7 +4,7 @@ namespace Jellyfin.Plugin.Kinopoisk.Configuration
 {
     public class PluginConfiguration : BasePluginConfiguration
     {
-        // https://kinopoiskapiunofficial.tech/
+        // Personal API key: https://kinopoiskapiunofficial.tech/profile
         public string ApiToken { get; set; } = string.Empty;
     }
 }
