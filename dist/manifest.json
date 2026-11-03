@@ -9,12 +9,12 @@
     "imageUrl": "https://kinopoisk.userecho.com/s/attachments/28876/0/1/25f8c0315e6ccb2aa6c2642e48f2c9e9.png",
     "versions": [
       {
-        "version": "12.1.0.2",
-        "checksum": "3b7864f0540accbebed7de968b2c907d",
-        "changelog": "Исправлена регистрация metadata providers и remote image providers в DI-контейнере Jellyfin 12. Провайдеры КиноПоиска стали доступны Jellyfin для поиска и загрузки метаданных фильмов, сериалов и персон.",
+        "version": "12.1.0.3",
+        "checksum": "23f0dc51e787712d5a45d03819fe22ec",
+        "changelog": "\n- Обновлена страница настроек плагина: ссылка ведёт непосредственно на профиль API, где отображается API-KEY.\n- Улучшены подписи поля API-KEY и кнопки сохранения.\n- Обновлена пользовательская документация: установка, получение ключа, настройка загрузчика метаданных «КиноПоиск» в параметрах библиотеки.\n- Исправлен процесс подготовки релизов: теперь публикация блокируется, если для версии отсутствует описание в CHANGELOG.md.\n",
         "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://github.com/Rev01T/jellyfin-plugin-kinopoisk-next/releases/download/v12.1.0.2/jellyfin-plugin-kinopoisk_12.1.0.2.zip",
-        "timestamp": "2026-11-02T15:09:21Z"
+        "sourceUrl": "https://github.com/Rev01T/jellyfin-plugin-kinopoisk-next/releases/download/v12.1.0.3/jellyfin-plugin-kinopoisk_12.1.0.3.zip",
+        "timestamp": "2026-11-03T13:16:08Z"
       },
       {
         "version": "10.10.3.0",
