@@ -51,6 +51,8 @@ namespace Jellyfin.Plugin.Kinopoisk
             serviceCollection.AddSingleton<IProviderIdResolver<PersonLookupInfo>, CommonResolver<PersonLookupInfo>>();
             serviceCollection.AddSingleton<IProviderIdResolver<BaseItem>, CommonResolver<BaseItem>>();
 
+            // Register metadata providers explicitly. Jellyfin resolves providers
+            // from DI; loading the plugin assembly alone does not activate them.
             serviceCollection.AddSingleton<IMetadataProvider, MovieMetadataProvider>();
             serviceCollection.AddSingleton<IMetadataProvider, SeriesMetadataProvider>();
             serviceCollection.AddSingleton<IMetadataProvider, PersonMetadataProvider>();
