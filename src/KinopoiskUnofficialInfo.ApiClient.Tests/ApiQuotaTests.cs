@@ -12,7 +12,7 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
     public class ApiQuotaTests
     {
         [Fact]
-        public async Task ShouldNotSendAnotherRequestAfterQuotaExceeded()
+        public async Task ShouldPropagateQuotaErrorAndAvoidCachingIt()
         {
             var handler = new QuotaExceededHandler();
             var httpClientFactory = new Mock<IHttpClientFactory>();
@@ -30,18 +30,18 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
                 cache,
                 NullLogger<CachedKinopoiskApiClient>.Instance);
 
-            var firstResult = await client.GetSingleFilm(1);
-            var secondResult = await client.GetSingleFilm(2);
+            await Assert.ThrowsAsync<ApiException>(() => client.GetSingleFilm(1));
+            await Assert.ThrowsAsync<ApiException>(() => client.GetSingleFilm(1));
+            await Assert.ThrowsAsync<ApiException>(() => client.GetSingleFilm(2));
 
-            Assert.Null(firstResult);
-            Assert.Null(secondResult);
+            // The first request reaches the API. Subsequent calls fail from the client's
+            // quota cooldown, proving that no empty fallback was stored in the response cache.
             Assert.Equal(1, handler.RequestCount);
         }
 
         private sealed class QuotaExceededHandler : HttpMessageHandler
         {
             private int _requestCount;
-
             public int RequestCount => _requestCount;
 
             protected override Task<HttpResponseMessage> SendAsync(

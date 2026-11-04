@@ -10,9 +10,7 @@ namespace KinopoiskUnofficialInfo.ApiClient
 {
     public class KinopoiskApiClient : IKinopoiskApiClient
     {
-        private readonly string _apiToken;
         private readonly ILogger<KinopoiskApiClient> _logger;
-        private readonly IHttpClientFactory _httpClientFactory;
         private readonly Client _apiClient;
         private static readonly TimeSpan QuotaCooldown = TimeSpan.FromHours(1);
         private readonly object _quotaLock = new object();
@@ -24,16 +22,14 @@ namespace KinopoiskUnofficialInfo.ApiClient
 
         public KinopoiskApiClient(string apiToken, ILogger<KinopoiskApiClient> logger, IHttpClientFactory httpClientFactory)
         {
-            _apiToken = apiToken ?? string.Empty;
-            _logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
-            if (string.IsNullOrWhiteSpace(_apiToken))
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            if (string.IsNullOrWhiteSpace(apiToken))
                 _logger.LogWarning("No Kinopoisk API token is configured. Set a personal token in the plugin settings.");
-            _httpClientFactory = httpClientFactory ?? throw new System.ArgumentNullException(nameof(httpClientFactory));
 
-            var httpClient = _httpClientFactory.CreateClient("KinopoiskApiClient");
-            if (!string.IsNullOrWhiteSpace(_apiToken))
-                httpClient.DefaultRequestHeaders.Add("X-API-KEY", _apiToken);
-            _apiClient = new Client(httpClient);
+            if (httpClientFactory == null)
+                throw new ArgumentNullException(nameof(httpClientFactory));
+
+            _apiClient = new Client(httpClientFactory.CreateClient("KinopoiskApiClient"));
         }
 
         private async Task<T> Invoke<T>(Func<CancellationToken, Task<T>> method, CancellationToken? ct, [CallerMemberName] string memberName = "")
@@ -48,13 +44,14 @@ namespace KinopoiskUnofficialInfo.ApiClient
             }
             if (quotaException != null)
                 throw quotaException;
+
             try
             {
                 var requestCancellation = ct ?? CancellationToken.None;
                 await WaitForRequestSlot(requestCancellation).ConfigureAwait(false);
                 _logger.LogDebug("{ApiMethod} request starting...", memberName);
                 var res = await method.Invoke(requestCancellation).ConfigureAwait(false);
-                _logger.LogDebug($"{memberName} request complete successfully");
+                _logger.LogDebug("{ApiMethod} request completed successfully", memberName);
                 return res;
             }
             catch (ApiException e)
@@ -76,6 +73,10 @@ namespace KinopoiskUnofficialInfo.ApiClient
                     }
                     if (shouldLog)
                         _logger.LogWarning("Kinopoisk API quota exhausted. Requests are paused until {BlockedUntil:u}", blockedUntil);
+                }
+                else if (e.StatusCode == 401)
+                {
+                    _logger.LogWarning("Kinopoisk API rejected the configured API key (HTTP 401). Check the key in plugin settings.");
                 }
                 else
                 {
@@ -100,28 +101,30 @@ namespace KinopoiskUnofficialInfo.ApiClient
                 _requestStartLock.Release();
             }
         }
+
         public Task<Film> GetSingleFilm(int filmId, CancellationToken? cancellationToken = null)
-            => Invoke((ct) => _apiClient.FilmsAsync(filmId, ct), cancellationToken);
+            => Invoke(ct => _apiClient.FilmsAsync(filmId, ct), cancellationToken);
 
         public Task<ICollection<StaffResponse>> GetStaff(int filmId, CancellationToken? cancellationToken = null)
-            => Invoke((ct) => _apiClient.StaffAllAsync(filmId, ct), cancellationToken);
+            => Invoke(ct => _apiClient.StaffAllAsync(filmId, ct), cancellationToken);
 
         public Task<FilmSearchResponse> SearchByKeyword(string keyword, int page = 1, CancellationToken? cancellationToken = null)
-            => Invoke((ct) => _apiClient.SearchByKeywordAsync(keyword, null, ct), cancellationToken);
+            => Invoke(ct => _apiClient.SearchByKeywordAsync(keyword, null, ct), cancellationToken);
 
         public Task<PersonResponse> GetPerson(int personId, CancellationToken? cancellationToken = null)
-            => Invoke((ct) => _apiClient.StaffAsync(personId, ct), cancellationToken);
+            => Invoke(ct => _apiClient.StaffAsync(personId, ct), cancellationToken);
 
         public Task<VideoResponse> GetTrailers(int filmId, CancellationToken? cancellationToken = null)
         {
-            return Invoke(async (ct) => {
-                try {
-                    return await _apiClient.VideosAsync(filmId, ct);
-                } catch (ApiException e)
+            return Invoke(async ct =>
+            {
+                try
                 {
-                    if (e.StatusCode == 404)
-                        return new VideoResponse();
-                    throw;
+                    return await _apiClient.VideosAsync(filmId, ct).ConfigureAwait(false);
+                }
+                catch (ApiException e) when (e.StatusCode == 404)
+                {
+                    return new VideoResponse();
                 }
             }, cancellationToken);
         }

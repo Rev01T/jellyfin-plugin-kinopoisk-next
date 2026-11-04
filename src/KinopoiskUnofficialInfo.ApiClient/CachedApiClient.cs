@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,25 +21,25 @@ namespace KinopoiskUnofficialInfo.ApiClient
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public CachedKinopoiskApiClient(string apiToken, ILogger<KinopoiskApiClient> innerLogger, IHttpClientFactory httpClientFactory, IMemoryCache cache, ILogger<CachedKinopoiskApiClient> logger)
+        public CachedKinopoiskApiClient(string apiToken, ILogger<KinopoiskApiClient> innerLogger, System.Net.Http.IHttpClientFactory httpClientFactory, IMemoryCache cache, ILogger<CachedKinopoiskApiClient> logger)
             : this(new KinopoiskApiClient(apiToken, innerLogger, httpClientFactory), cache, logger)
         {
         }
 
         public Task<PersonResponse> GetPerson(int personId, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(GetPerson), personId), c => c.GetPerson(personId, cancellationToken), () => null);
+            => TryGetValue(GenerateKey(nameof(GetPerson), personId), c => c.GetPerson(personId, cancellationToken));
 
         public Task<Film> GetSingleFilm(int filmId, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(GetSingleFilm), filmId), c => c.GetSingleFilm(filmId, cancellationToken), () => null);
+            => TryGetValue(GenerateKey(nameof(GetSingleFilm), filmId), c => c.GetSingleFilm(filmId, cancellationToken));
 
         public Task<ICollection<StaffResponse>> GetStaff(int filmId, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(GetStaff), filmId), c => c.GetStaff(filmId, cancellationToken), () => Array.Empty<StaffResponse>());
+            => TryGetValue(GenerateKey(nameof(GetStaff), filmId), c => c.GetStaff(filmId, cancellationToken));
 
         public Task<VideoResponse> GetTrailers(int filmId, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(GetTrailers), filmId), c => c.GetTrailers(filmId, cancellationToken), () => new VideoResponse());
+            => TryGetValue(GenerateKey(nameof(GetTrailers), filmId), c => c.GetTrailers(filmId, cancellationToken));
 
         public Task<FilmSearchResponse> SearchByKeyword(string keyword, int page = 1, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(SearchByKeyword), keyword, page), c => c.SearchByKeyword(keyword, page, cancellationToken), () => new FilmSearchResponse());
+            => TryGetValue(GenerateKey(nameof(SearchByKeyword), keyword, page), c => c.SearchByKeyword(keyword, page, cancellationToken));
 
         private static string GenerateKey(params object[] objects)
         {
@@ -50,22 +49,15 @@ namespace KinopoiskUnofficialInfo.ApiClient
             return key.ToString();
         }
 
-        private Task<T> TryGetValue<T>(string key, Func<IKinopoiskApiClient, Task<T>> resultFactory, Func<T> quotaFallbackFactory)
+        private Task<T> TryGetValue<T>(string key, Func<IKinopoiskApiClient, Task<T>> resultFactory)
         {
             return _cache.GetOrCreateAsync(key, async entry =>
             {
-                _logger.LogDebug($"Entry '{key}' not found in cache, requesting from server");
+                _logger.LogDebug("Cache entry '{CacheKey}' not found; requesting from server", key);
                 entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
-
-                try
-                {
-                    return await resultFactory.Invoke(_innerClient).ConfigureAwait(false);
-                }
-                catch (ApiException exception) when (exception.StatusCode == 402)
-                {
-                    _logger.LogWarning("Kinopoisk API quota exhausted; returning an empty result for {CacheKey}", key);
-                    return quotaFallbackFactory();
-                }
+                // Exceptions are deliberately allowed to propagate. In particular, quota and
+                // authentication failures must not be cached as successful empty API responses.
+                return await resultFactory(_innerClient).ConfigureAwait(false);
             });
         }
     }
