@@ -24,7 +24,8 @@ namespace Jellyfin.Plugin.Kinopoisk
             serviceCollection.AddHttpClient("KinopoiskApiClient", client =>
             {
                 client.Timeout = System.TimeSpan.FromSeconds(20);
-            });
+            }).AddHttpMessageHandler(() => new ApiKeyHandler(
+                () => Plugin.Instance?.Configuration.ApiToken));
 
             serviceCollection.AddHttpClient("KinopoiskImageSanitizer", client =>
             {
@@ -35,7 +36,7 @@ namespace Jellyfin.Plugin.Kinopoisk
             });
 
             serviceCollection.AddSingleton((sp) => new KinopoiskApiClient(
-                Plugin.Instance.Configuration.ApiToken,
+                Plugin.Instance?.Configuration.ApiToken,
                 sp.GetRequiredService<ILogger<KinopoiskApiClient>>(),
                 sp.GetRequiredService<IHttpClientFactory>()
             ));
@@ -50,8 +51,6 @@ namespace Jellyfin.Plugin.Kinopoisk
             serviceCollection.AddSingleton<IProviderIdResolver<PersonLookupInfo>, CommonResolver<PersonLookupInfo>>();
             serviceCollection.AddSingleton<IProviderIdResolver<BaseItem>, CommonResolver<BaseItem>>();
 
-            // Register metadata providers explicitly. Jellyfin resolves providers
-            // from DI; loading the plugin assembly alone does not activate them.
             serviceCollection.AddSingleton<IMetadataProvider, MovieMetadataProvider>();
             serviceCollection.AddSingleton<IMetadataProvider, SeriesMetadataProvider>();
             serviceCollection.AddSingleton<IMetadataProvider, PersonMetadataProvider>();
