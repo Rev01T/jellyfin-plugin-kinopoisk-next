@@ -43,23 +43,30 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             if (!resolveResult)
                 return Enumerable.Empty<RemoteImageInfo>();
 
-            // Keep the film's posterUrl first: the API exposes it as the current film poster.
-            // The images endpoint supplies additional full-size alternatives.
+            // Always return the film's posterUrl. Gallery requests are opt-in because
+            // they consume additional Kinopoisk API quota for every library item.
             var film = await _apiClient.GetSingleFilm(kinopoiskId, cancellationToken);
             var images = new List<RemoteImageInfo>();
             images.AddRange(film.ToRemoteImageInfos());
 
-            var posters = await _apiClient.GetImages(kinopoiskId, "POSTER", cancellationToken: cancellationToken);
-            images.AddRange(posters.ToRemoteImageInfos(ImageType.Primary));
-
-            var wallpapers = await _apiClient.GetImages(kinopoiskId, "WALLPAPER", cancellationToken: cancellationToken);
-            var backdropImages = wallpapers.ToRemoteImageInfos(ImageType.Backdrop).ToArray();
-            if (backdropImages.Length == 0)
+            var configuration = Plugin.Instance?.Configuration;
+            if (configuration?.EnableAlternativePosters == true)
             {
-                var covers = await _apiClient.GetImages(kinopoiskId, "COVER", cancellationToken: cancellationToken);
-                backdropImages = covers.ToRemoteImageInfos(ImageType.Backdrop).ToArray();
+                var posters = await _apiClient.GetImages(kinopoiskId, "POSTER", cancellationToken: cancellationToken);
+                images.AddRange(posters.ToRemoteImageInfos(ImageType.Primary));
             }
-            images.AddRange(backdropImages);
+
+            if (configuration?.EnableBackdropImages == true)
+            {
+                var wallpapers = await _apiClient.GetImages(kinopoiskId, "WALLPAPER", cancellationToken: cancellationToken);
+                var backdropImages = wallpapers.ToRemoteImageInfos(ImageType.Backdrop).ToArray();
+                if (backdropImages.Length == 0)
+                {
+                    var covers = await _apiClient.GetImages(kinopoiskId, "COVER", cancellationToken: cancellationToken);
+                    backdropImages = covers.ToRemoteImageInfos(ImageType.Backdrop).ToArray();
+                }
+                images.AddRange(backdropImages);
+            }
 
             var uniqueImages = images
                 .Where(image => image != null && !string.IsNullOrWhiteSpace(image.Url))
