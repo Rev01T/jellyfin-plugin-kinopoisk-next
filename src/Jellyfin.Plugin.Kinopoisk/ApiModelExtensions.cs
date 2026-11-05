@@ -143,52 +143,38 @@ namespace Jellyfin.Plugin.Kinopoisk
 
         public static IEnumerable<RemoteImageInfo> ToRemoteImageInfos(this Film src)
         {
-            var res = Enumerable.Empty<RemoteImageInfo>();
-            if (src is null)
-                return res;
+            if (src is null || string.IsNullOrWhiteSpace(src.PosterUrl))
+                return Enumerable.Empty<RemoteImageInfo>();
 
-            if (src?.PosterUrl != null)
+            return new[]
             {
-                var mainPoster = new RemoteImageInfo(){
+                new RemoteImageInfo
+                {
                     Type = ImageType.Primary,
                     Url = src.PosterUrl,
                     Language = Constants.ProviderMetadataLanguage,
                     ProviderName = Constants.ProviderName
-                };
-                res = res.Concat(Enumerable.Repeat(mainPoster, 1));
-            }
-
-            // if (src.Images != null)
-            // {
-            //     if (src.Images.Posters != null)
-            //         res = res.Concat(src.Images.Posters.ToRemoteImageInfos(ImageType.Primary));
-            //     if  (src.Images.Backdrops != null)
-            //         res = res.Concat(src.Images.Backdrops.ToRemoteImageInfos(ImageType.Backdrop));
-            // }
-
-            return res;
+                }
+            };
         }
 
-        // public static IEnumerable<RemoteImageInfo> ToRemoteImageInfos(this IEnumerable<Images_posters> src, ImageType imageType)
-        // {
-        //     return src.Select(s => s.ToRemoteImageInfo(imageType))
-        //         .Where(s => s != null);
-        // }
+        public static IEnumerable<RemoteImageInfo> ToRemoteImageInfos(this FilmImagesResponse src, ImageType imageType)
+        {
+            if (src?.Items is null)
+                return Enumerable.Empty<RemoteImageInfo>();
 
-        // public static RemoteImageInfo ToRemoteImageInfo(this Images_posters src, ImageType imageType)
-        // {
-        //     if (src is null)
-        //         return null;
-
-        //     return new RemoteImageInfo(){
-        //         Type = imageType,
-        //         Url = src.Url,
-        //         Language = src.Language,
-        //         Height = src.Height,
-        //         Width = src.Width,
-        //         ProviderName = Constants.ProviderName
-        //     };
-        // }
+            return src.Items
+                .Where(image => image != null && !string.IsNullOrWhiteSpace(image.ImageUrl))
+                .Select(image => new RemoteImageInfo
+                {
+                    Type = imageType,
+                    // imageUrl is the original image. previewUrl is only a thumbnail and must
+                    // not be offered to Jellyfin as the full-size artwork.
+                    Url = image.ImageUrl,
+                    Language = Constants.ProviderMetadataLanguage,
+                    ProviderName = Constants.ProviderName
+                });
+        }
 
         public static IReadOnlyList<MediaUrl> ToMediaUrls(this VideoResponse src)
         {
