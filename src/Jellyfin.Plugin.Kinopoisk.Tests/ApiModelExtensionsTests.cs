@@ -27,6 +27,33 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
             Assert.Equal(2, result[1].SortOrder);
         }
 
+        [Fact]
+        public void ToRemoteImageInfosUsesOriginalImageUrlInsteadOfPreviewUrl()
+        {
+            var response = new FilmImagesResponse
+            {
+                Items = new List<FilmImage>
+                {
+                    new FilmImage
+                    {
+                        ImageUrl = "https://images.example/original",
+                        PreviewUrl = "https://images.example/300x"
+                    },
+                    new FilmImage
+                    {
+                        ImageUrl = null,
+                        PreviewUrl = "https://images.example/preview-only"
+                    }
+                }
+            };
+
+            var result = response.ToRemoteImageInfos(MediaBrowser.Model.Entities.ImageType.Primary).ToArray();
+
+            Assert.Single(result);
+            Assert.Equal("https://images.example/original", result[0].Url);
+            Assert.Equal(MediaBrowser.Model.Entities.ImageType.Primary, result[0].Type);
+        }
+
         private static StaffResponse CreateStaff(
             int id,
             string nameRu,
