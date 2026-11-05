@@ -35,11 +35,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             => item is Movie || item is Series;
 
         public override IEnumerable<ImageType> GetSupportedImages(BaseItem item)
-            => new ImageType[]
-            {
-                ImageType.Primary,
-                ImageType.Backdrop
-            };
+            => new[] { ImageType.Primary, ImageType.Backdrop };
 
         public override async Task<IEnumerable<RemoteImageInfo>> GetImages(BaseItem item, CancellationToken cancellationToken)
         {
@@ -47,9 +43,48 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             if (!resolveResult)
                 return Enumerable.Empty<RemoteImageInfo>();
 
+            // Keep the film's posterUrl first: the API exposes it as the current film poster.
+            // The images endpoint supplies additional full-size alternatives.
             var film = await _apiClient.GetSingleFilm(kinopoiskId, cancellationToken);
+            var images = new List<RemoteImageInfo>();
+            images.AddRange(film.ToRemoteImageInfos());
 
-            return await FilterEmptyImages(film.ToRemoteImageInfos(), cancellationToken);
+            var posters = await _apiClient.GetImages(kinopoiskId, "POSTER", cancellationToken: cancellationToken);
+            images.AddRange(posters.ToRemoteImageInfos(ImageType.Primary));
+
+            var wallpapers = await _apiClient.GetImages(kinopoiskId, "WALLPAPER", cancellationToken: cancellationToken);
+            var backdropImages = wallpapers.ToRemoteImageInfos(ImageType.Backdrop).ToArray();
+            if (backdropImages.Length == 0)
+            {
+                var covers = await _apiClient.GetImages(kinopoiskId, "COVER", cancellationToken: cancellationToken);
+                backdropImages = covers.ToRemoteImageInfos(ImageType.Backdrop).ToArray();
+            }
+            images.AddRange(backdropImages);
+
+            var uniqueImages = images
+                .Where(image => image != null && !string.IsNullOrWhiteSpace(image.Url))
+                .GroupBy(image => (image.Type, image.Url), StringTupleComparer.Instance)
+                .Select(group => group.First())
+                .ToArray();
+
+            _logger.LogDebug(
+                "Retrieved {PrimaryCount} poster and {BackdropCount} backdrop candidates for Kinopoisk film {KinopoiskId}",
+                uniqueImages.Count(image => image.Type == ImageType.Primary),
+                uniqueImages.Count(image => image.Type == ImageType.Backdrop),
+                kinopoiskId);
+
+            return await FilterEmptyImages(uniqueImages, cancellationToken);
+        }
+
+        private sealed class StringTupleComparer : IEqualityComparer<(ImageType Type, string Url)>
+        {
+            public static readonly StringTupleComparer Instance = new StringTupleComparer();
+
+            public bool Equals((ImageType Type, string Url) x, (ImageType Type, string Url) y)
+                => x.Type == y.Type && StringComparer.OrdinalIgnoreCase.Equals(x.Url, y.Url);
+
+            public int GetHashCode((ImageType Type, string Url) obj)
+                => HashCode.Combine(obj.Type, StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Url ?? string.Empty));
         }
     }
 }
