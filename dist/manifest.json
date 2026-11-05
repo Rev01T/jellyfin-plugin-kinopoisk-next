@@ -9,12 +9,12 @@
     "imageUrl": "https://kinopoisk.userecho.com/s/attachments/28876/0/1/25f8c0315e6ccb2aa6c2642e48f2c9e9.png",
     "versions": [
       {
-        "version": "12.1.0.4",
-        "checksum": "d788bf5549de8753c2281d4a6e937b1a",
-        "changelog": "\n- Исправлено применение актуального API-ключа КиноПоиска для каждого запроса без пересоздания клиента.\n- Добавлена проверка пустого API-ключа до отправки запроса.\n- Улучшено логирование ошибки HTTP 401 без раскрытия API-ключа.\n- Ошибки HTTP 402 (исчерпание квоты) больше не преобразуются в пустые ответы и не кэшируются как успешный результат.\n- Добавлены тесты обновления API-ключа, отсутствующего ключа и обработки ошибок квоты.\n",
+        "version": "12.1.0.5",
+        "checksum": "1751111211646c470257a90aa805ba07",
+        "changelog": "\n- Улучшена загрузка изображений фильмов и сериалов из галереи КиноПоиска.\n- Добавлены альтернативные постеры из галереи POSTER; основной posterUrl сохраняется первым.\n- Добавлена загрузка фонов WALLPAPER с резервным использованием COVER.\n- Для изображений используется оригинальный imageUrl, previewUrl не передаётся Jellyfin как полноразмерная обложка.\n- Добавлено кэширование страниц галереи и тесты API-клиента и преобразования изображений.\n",
         "targetAbi": "12.0.0.0",
-        "sourceUrl": "https://github.com/Rev01T/jellyfin-plugin-kinopoisk-next/releases/download/v12.1.0.4/jellyfin-plugin-kinopoisk_12.1.0.4.zip",
-        "timestamp": "2026-11-04T18:11:40Z"
+        "sourceUrl": "https://github.com/Rev01T/jellyfin-plugin-kinopoisk-next/releases/download/v12.1.0.5/jellyfin-plugin-kinopoisk_12.1.0.5.zip",
+        "timestamp": "2026-11-05T12:01:56Z"
       },
       {
         "version": "10.10.3.0",
