@@ -125,7 +125,8 @@ namespace KinopoiskUnofficialInfo.ApiClient
             var relativeUrl = $"/api/v2.2/films/{filmId}/images?type={escapedType}&page={page}";
             return Invoke(async ct =>
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, relativeUrl);
+                var requestUri = new Uri(_apiClient.BaseUrl.TrimEnd('/') + relativeUrl, UriKind.Absolute);
+                using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
                 using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
                 var responseBody = response.Content == null
                     ? string.Empty
