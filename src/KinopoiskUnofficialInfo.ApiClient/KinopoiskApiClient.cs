@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 namespace KinopoiskUnofficialInfo.ApiClient
 {
@@ -12,6 +14,7 @@ namespace KinopoiskUnofficialInfo.ApiClient
     {
         private readonly ILogger<KinopoiskApiClient> _logger;
         private readonly Client _apiClient;
+        private readonly HttpClient _httpClient;
         private static readonly TimeSpan QuotaCooldown = TimeSpan.FromHours(1);
         private readonly object _quotaLock = new object();
         private DateTimeOffset _quotaBlockedUntil = DateTimeOffset.MinValue;
@@ -29,7 +32,8 @@ namespace KinopoiskUnofficialInfo.ApiClient
             if (httpClientFactory == null)
                 throw new ArgumentNullException(nameof(httpClientFactory));
 
-            _apiClient = new Client(httpClientFactory.CreateClient("KinopoiskApiClient"));
+            _httpClient = httpClientFactory.CreateClient("KinopoiskApiClient");
+            _apiClient = new Client(_httpClient);
         }
 
         private async Task<T> Invoke<T>(Func<CancellationToken, Task<T>> method, CancellationToken? ct, [CallerMemberName] string memberName = "")
@@ -38,9 +42,7 @@ namespace KinopoiskUnofficialInfo.ApiClient
             lock (_quotaLock)
             {
                 if (DateTimeOffset.UtcNow < _quotaBlockedUntil)
-                {
                     quotaException = new ApiException("Kinopoisk API daily request limit exceeded.", 402, _quotaExceededResponse, new Dictionary<string, IEnumerable<string>>(), null);
-                }
             }
             if (quotaException != null)
                 throw quotaException;
@@ -75,13 +77,9 @@ namespace KinopoiskUnofficialInfo.ApiClient
                         _logger.LogWarning("Kinopoisk API quota exhausted. Requests are paused until {BlockedUntil:u}", blockedUntil);
                 }
                 else if (e.StatusCode == 401)
-                {
                     _logger.LogWarning("Kinopoisk API rejected the configured API key (HTTP 401). Check the key in plugin settings.");
-                }
                 else
-                {
                     _logger.LogError("Received non-success result status code {StatusCode} from Kinopoisk API, response content is: {Response}", e.StatusCode, e.Response);
-                }
                 throw;
             }
         }
@@ -113,6 +111,45 @@ namespace KinopoiskUnofficialInfo.ApiClient
 
         public Task<PersonResponse> GetPerson(int personId, CancellationToken? cancellationToken = null)
             => Invoke(ct => _apiClient.StaffAsync(personId, ct), cancellationToken);
+
+        public Task<FilmImagesResponse> GetImages(int filmId, string type, int page = 1, CancellationToken? cancellationToken = null)
+        {
+            if (filmId < 1 || filmId > 15000000)
+                throw new ArgumentOutOfRangeException(nameof(filmId));
+            if (page < 1 || page > 20)
+                throw new ArgumentOutOfRangeException(nameof(page));
+            if (string.IsNullOrWhiteSpace(type))
+                throw new ArgumentException("Image type is required.", nameof(type));
+
+            var escapedType = Uri.EscapeDataString(type.Trim().ToUpperInvariant());
+            var relativeUrl = $"/api/v2.2/films/{filmId}/images?type={escapedType}&page={page}";
+            return Invoke(async ct =>
+            {
+                var requestUri = new Uri(_apiClient.BaseUrl.TrimEnd('/') + relativeUrl, UriKind.Absolute);
+                using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+                using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                var responseBody = response.Content == null
+                    ? string.Empty
+                    : await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var headers = response.Headers
+                        .Concat(response.Content?.Headers ?? Enumerable.Empty<KeyValuePair<string, IEnumerable<string>>>())
+                        .GroupBy(header => header.Key, StringComparer.OrdinalIgnoreCase)
+                        .ToDictionary(group => group.Key, group => group.First().Value, StringComparer.OrdinalIgnoreCase);
+                    throw new ApiException(
+                        $"Kinopoisk image request failed with HTTP {(int)response.StatusCode}.",
+                        (int)response.StatusCode,
+                        responseBody,
+                        headers,
+                        null);
+                }
+
+                return JsonConvert.DeserializeObject<FilmImagesResponse>(responseBody)
+                    ?? new FilmImagesResponse();
+            }, cancellationToken);
+        }
 
         public Task<VideoResponse> GetTrailers(int filmId, CancellationToken? cancellationToken = null)
         {
