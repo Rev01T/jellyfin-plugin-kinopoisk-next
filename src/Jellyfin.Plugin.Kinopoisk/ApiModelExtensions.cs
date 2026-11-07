@@ -75,10 +75,12 @@ namespace Jellyfin.Plugin.Kinopoisk
 
             FillCommonFilmInfo(src, res);
 
-            // res.EndDate = src.Data.GetEndDate();
-            // res.Status = src.Data.IsContinuing()
-            //     ? SeriesStatus.Continuing
-            //     : SeriesStatus.Ended;
+            if (src.EndYear > 1900)
+                res.EndDate = new DateTime(src.EndYear, 12, 31);
+
+            res.Status = src.Completed
+                ? SeriesStatus.Ended
+                : SeriesStatus.Continuing;
 
             return res;
         }
@@ -105,16 +107,20 @@ namespace Jellyfin.Plugin.Kinopoisk
                 dst.ProductionYear = src.Year;
             if (!string.IsNullOrWhiteSpace(src.Slogan))
                 dst.Tagline = src.Slogan;
-            dst.Overview = src.Description;
+            dst.Overview = !string.IsNullOrWhiteSpace(src.Description)
+                ? src.Description
+                : src.ShortDescription;
             if (src.Countries != null)
                 dst.ProductionLocations = src.Countries.Select(c => c.Country1).ToArray();
             if (src.Genres != null)
-                foreach(var genre in src.Genres.Select(c => c.Genre1))
-                    dst.AddGenre(genre);
-            if (!string.IsNullOrEmpty(src.RatingAgeLimits))
-                dst.OfficialRating = $"{src.RatingAgeLimits}+";
-            else
-                dst.OfficialRating = src.RatingMpaa;
+                foreach (var genre in src.Genres.Select(c => NormalizeGenre(c.Genre1)))
+                    if (!string.IsNullOrWhiteSpace(genre))
+                        dst.AddGenre(genre);
+
+            dst.OfficialRating = NormalizeOfficialRating(src.RatingAgeLimits, src.RatingMpaa);
+
+            if (src.FilmLength > 0)
+                dst.RunTimeTicks = TimeSpan.FromMinutes(src.FilmLength).Ticks;
 
             dst.CommunityRating = (float)src.RatingKinopoisk;
             if (dst.CommunityRating < 0.1)
@@ -132,13 +138,56 @@ namespace Jellyfin.Plugin.Kinopoisk
             if (src is null)
                 return null;
 
+            // Jellyfin's CriticRating is a 0-100 score. Kinopoisk critic
+            // ratings are on a 0-10 scale, so convert them to percentages.
+            // ratingGoodReview is intentionally not used: its semantics are
+            // not established by the API/site comparison in the mapping audit.
             if (src.RatingRfCritics > 0.0)
-                return (float)src.RatingRfCritics;
+                return (float)(src.RatingRfCritics * 10.0);
 
             if (src.RatingFilmCritics > 0.0)
-                return (float)src.RatingFilmCritics;
+                return (float)(src.RatingFilmCritics * 10.0);
 
             return null;
+        }
+
+        public static string NormalizeOfficialRating(string ageLimit, string mpaa)
+        {
+            if (!string.IsNullOrWhiteSpace(ageLimit))
+            {
+                var normalizedAge = ageLimit.Trim().ToLowerInvariant();
+                if (normalizedAge.StartsWith("age", StringComparison.Ordinal))
+                    normalizedAge = normalizedAge.Substring(3);
+                normalizedAge = normalizedAge.TrimEnd('+');
+
+                if (normalizedAge is "0" or "6" or "12" or "16" or "18")
+                    return normalizedAge + "+";
+            }
+
+            if (string.IsNullOrWhiteSpace(mpaa))
+                return null;
+
+            var normalizedMpaa = mpaa.Trim().ToUpperInvariant();
+            return normalizedMpaa switch
+            {
+                "PG13" => "PG-13",
+                "PG-13" => "PG-13",
+                "R" => "R",
+                "G" => "G",
+                "PG" => "PG",
+                "NC17" => "NC-17",
+                "NC-17" => "NC-17",
+                _ => normalizedMpaa
+            };
+        }
+
+        private static string NormalizeGenre(string genre)
+        {
+            if (string.IsNullOrWhiteSpace(genre))
+                return genre;
+
+            var trimmed = genre.Trim();
+            return char.ToUpper(trimmed[0], CultureInfo.InvariantCulture) + trimmed.Substring(1);
         }
 
         public static IEnumerable<RemoteImageInfo> ToRemoteImageInfos(this Film src)
@@ -258,9 +307,7 @@ namespace Jellyfin.Plugin.Kinopoisk
             return src switch
             {
                 StaffResponseProfessionKey.ACTOR => PersonKind.Actor,
-                StaffResponseProfessionKey.DIRECTOR
-                    or StaffResponseProfessionKey.VOICE_DIRECTOR
-                    or StaffResponseProfessionKey.OPERATOR => PersonKind.Director,
+                StaffResponseProfessionKey.DIRECTOR => PersonKind.Director,
                 StaffResponseProfessionKey.WRITER => PersonKind.Writer,
                 StaffResponseProfessionKey.COMPOSER => PersonKind.Composer,
                 StaffResponseProfessionKey.PRODUCER
@@ -271,12 +318,16 @@ namespace Jellyfin.Plugin.Kinopoisk
             };
         }
 
-        public static DateTime? ParseDate(this string src){
-            if (src == null)
+        public static DateTime? ParseDate(this string src)
+        {
+            if (string.IsNullOrWhiteSpace(src))
                 return null;
 
-            if (DateTime.TryParseExact(src, "o", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var res))
-                return res;
+            if (DateTime.TryParseExact(src, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var dateOnly))
+                return dateOnly;
+
+            if (DateTime.TryParseExact(src, "o", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dateTime))
+                return dateTime;
 
             return null;
         }
