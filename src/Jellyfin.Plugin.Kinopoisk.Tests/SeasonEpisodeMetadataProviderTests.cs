@@ -110,5 +110,68 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
                 new Dictionary<string, string> { [Constants.ProviderId] = "12345" }, out var id));
             Assert.Equal(12345, id);
         }
+
+        [Fact]
+        public void CreateSeasonItemMapsSeasonNumberRussianNameAndSeriesProviderId()
+        {
+            var season = new KinopoiskUnofficialInfo.ApiClient.Season { Number = 2 };
+
+            var result = SeasonMetadataProvider.CreateSeasonItem(season, 12345);
+
+            Assert.Equal(2, result.IndexNumber);
+            Assert.Equal("Сезон 2", result.Name);
+            Assert.Equal("12345", result.ProviderIds[Constants.ProviderId]);
+        }
+
+        [Fact]
+        public void CreateSeasonItemMapsZeroSeasonAsSpecialsInRussian()
+        {
+            var result = SeasonMetadataProvider.CreateSeasonItem(
+                new KinopoiskUnofficialInfo.ApiClient.Season { Number = 0 }, 12345);
+
+            Assert.Equal("Спецвыпуски", result.Name);
+        }
+
+        [Fact]
+        public void CreateEpisodeItemMapsRussianTitleSynopsisDateAndProviderId()
+        {
+            var episode = new KinopoiskUnofficialInfo.ApiClient.Episode
+            {
+                SeasonNumber = 2,
+                EpisodeNumber = 3,
+                NameRu = "Название",
+                NameEn = "Title",
+                Synopsis = "Описание",
+                ReleaseDate = "2020-04-05"
+            };
+
+            var result = EpisodeMetadataProvider.CreateEpisodeItem(episode, 12345);
+
+            Assert.Equal(2, result.ParentIndexNumber);
+            Assert.Equal(3, result.IndexNumber);
+            Assert.Equal("Название", result.Name);
+            Assert.Equal("Описание", result.Overview);
+            Assert.Equal(new System.DateTime(2020, 4, 5), result.PremiereDate);
+            Assert.Equal("12345", result.ProviderIds[Constants.ProviderId]);
+        }
+
+        [Fact]
+        public void CreateEpisodeItemFallsBackToEnglishTitleWhenRussianTitleIsBlank()
+        {
+            var episode = new KinopoiskUnofficialInfo.ApiClient.Episode
+            {
+                SeasonNumber = 1,
+                EpisodeNumber = 1,
+                NameRu = " ",
+                NameEn = "English title",
+                Synopsis = "",
+                ReleaseDate = ""
+            };
+
+            var result = EpisodeMetadataProvider.CreateEpisodeItem(episode, 12345);
+
+            Assert.Equal("English title", result.Name);
+            Assert.Null(result.PremiereDate);
+        }
     }
 }
