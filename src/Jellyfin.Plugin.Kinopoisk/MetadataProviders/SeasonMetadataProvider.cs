@@ -1,38 +1,40 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using KinopoiskUnofficialInfo.ApiClient;
+using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Providers;
+using JellyfinSeason = MediaBrowser.Controller.Entities.TV.Season;
 
 namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
 {
     /// <summary>
     /// Resolves season metadata from the Kinopoisk series seasons endpoint.
     /// </summary>
-    public sealed class SeasonMetadataProvider : IRemoteMetadataProvider<Season, SeasonInfo>
+    public sealed class SeasonMetadataProvider : BaseMetadataProvider, IRemoteMetadataProvider<JellyfinSeason, SeasonInfo>
     {
         private readonly IKinopoiskApiClient _apiClient;
 
-        public SeasonMetadataProvider(IKinopoiskApiClient apiClient)
+        public SeasonMetadataProvider(IKinopoiskApiClient apiClient, IHttpClientFactory httpClientFactory)
+            : base(httpClientFactory)
         {
             _apiClient = apiClient ?? throw new System.ArgumentNullException(nameof(apiClient));
         }
 
-        public string Name => Constants.ProviderName;
-
-        public async Task<MetadataResult<Season>> GetMetadata(SeasonInfo info, CancellationToken cancellationToken)
+        public async Task<MetadataResult<JellyfinSeason>> GetMetadata(SeasonInfo info, CancellationToken cancellationToken)
         {
-            var result = new MetadataResult<Season>
+            var result = new MetadataResult<JellyfinSeason>
             {
                 QueriedById = true,
                 Provider = Constants.ProviderName,
                 ResultLanguage = Constants.ProviderMetadataLanguage
             };
 
-            if (!TryGetSeriesId(info?.SeriesProviderIds, out var seriesId) || !info.IndexNumber.HasValue)
+            if (info == null || !TryGetSeriesId(info.SeriesProviderIds, out var seriesId) || !info.IndexNumber.HasValue)
                 return result;
 
             var response = await _apiClient.GetSeasons(seriesId, cancellationToken).ConfigureAwait(false);
@@ -42,7 +44,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             if (season == null)
                 return result;
 
-            var item = new Season
+            var item = new JellyfinSeason
             {
                 IndexNumber = season.Number,
                 Name = season.Number == 0 ? "Specials" : $"Season {season.Number}"
