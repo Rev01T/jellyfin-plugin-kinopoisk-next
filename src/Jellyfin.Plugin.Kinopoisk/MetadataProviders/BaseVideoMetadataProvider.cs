@@ -31,6 +31,9 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
 
         protected abstract TItemType ConvertResponseToItem(Film apiResponse);
 
+        protected virtual Task EnrichItem(TItemType item, int kinopoiskId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+
         public async Task<MetadataResult<TItemType>> GetMetadata(TLookupInfoType info, CancellationToken cancellationToken)
         {
             var result = new MetadataResult<TItemType>()
@@ -51,7 +54,10 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
 
             result.Item = ConvertResponseToItem(film);
             if (result.Item != null)
+            {
+                await EnrichItem(result.Item, kinopoiskId, cancellationToken).ConfigureAwait(false);
                 result.HasMetadata = true;
+            }
 
             var staff = await _apiClient.GetStaff(kinopoiskId, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
