@@ -48,6 +48,15 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             if (episode == null)
                 return result;
 
+            var item = CreateEpisodeItem(episode, seriesId);
+
+            result.Item = item;
+            result.HasMetadata = true;
+            return result;
+        }
+
+        internal static JellyfinEpisode CreateEpisodeItem(KinopoiskUnofficialInfo.ApiClient.Episode episode, int seriesId)
+        {
             var item = new JellyfinEpisode
             {
                 ParentIndexNumber = episode.SeasonNumber,
@@ -57,10 +66,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
                 PremiereDate = episode.ReleaseDate.ParseDate()
             };
             item.ProviderIds[Constants.ProviderId] = seriesId.ToString(System.Globalization.CultureInfo.InvariantCulture);
-
-            result.Item = item;
-            result.HasMetadata = true;
-            return result;
+            return item;
         }
 
         internal static KinopoiskUnofficialInfo.ApiClient.Episode FindEpisode(SeasonResponse response, int seasonNumber, int episodeNumber)
