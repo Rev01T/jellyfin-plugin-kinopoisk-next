@@ -207,24 +207,6 @@ namespace Jellyfin.Plugin.Kinopoisk
             };
         }
 
-        public static IEnumerable<RemoteImageInfo> ToRemoteImageInfos(this FilmImagesResponse src, ImageType imageType)
-        {
-            if (src?.Items is null)
-                return Enumerable.Empty<RemoteImageInfo>();
-
-            return src.Items
-                .Where(image => image != null && !string.IsNullOrWhiteSpace(image.ImageUrl))
-                .Select(image => new RemoteImageInfo
-                {
-                    Type = imageType,
-                    // imageUrl is the original image. previewUrl is only a thumbnail and must
-                    // not be offered to Jellyfin as the full-size artwork.
-                    Url = image.ImageUrl,
-                    Language = Constants.ProviderMetadataLanguage,
-                    ProviderName = Constants.ProviderName
-                });
-        }
-
         public static IReadOnlyList<MediaUrl> ToMediaUrls(this VideoResponse src)
         {
             if (src is null || src.Items is null || src.Items.Count < 1)
