@@ -18,7 +18,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
     {
         private const int MaxConcurrentImageChecks = 8;
         private readonly ILogger _logger;
-        private readonly IKinopoiskApiClient _apiClient;
+        protected readonly IKinopoiskApiClient _apiClient;
         private readonly IProviderIdResolver<TLookupInfoType> _providerIdResolver;
 
         public BaseVideoMetadataProvider(IKinopoiskApiClient kinopoiskApiClient, IProviderIdResolver<TLookupInfoType> providerIdResolver, ILogger logger, System.Net.Http.IHttpClientFactory httpClientFactory)
