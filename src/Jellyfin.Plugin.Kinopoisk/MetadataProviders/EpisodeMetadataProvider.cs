@@ -1,38 +1,41 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using KinopoiskUnofficialInfo.ApiClient;
+using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Providers;
+using JellyfinEpisode = MediaBrowser.Controller.Entities.TV.Episode;
 
 namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
 {
     /// <summary>
     /// Resolves episode metadata from the Kinopoisk series seasons endpoint.
     /// </summary>
-    public sealed class EpisodeMetadataProvider : IRemoteMetadataProvider<Episode, EpisodeInfo>
+    public sealed class EpisodeMetadataProvider : BaseMetadataProvider, IRemoteMetadataProvider<JellyfinEpisode, EpisodeInfo>
     {
         private readonly IKinopoiskApiClient _apiClient;
 
-        public EpisodeMetadataProvider(IKinopoiskApiClient apiClient)
+        public EpisodeMetadataProvider(IKinopoiskApiClient apiClient, IHttpClientFactory httpClientFactory)
+            : base(httpClientFactory)
         {
             _apiClient = apiClient ?? throw new System.ArgumentNullException(nameof(apiClient));
         }
 
-        public string Name => Constants.ProviderName;
-
-        public async Task<MetadataResult<Episode>> GetMetadata(EpisodeInfo info, CancellationToken cancellationToken)
+        public async Task<MetadataResult<JellyfinEpisode>> GetMetadata(EpisodeInfo info, CancellationToken cancellationToken)
         {
-            var result = new MetadataResult<Episode>
+            var result = new MetadataResult<JellyfinEpisode>
             {
                 QueriedById = true,
                 Provider = Constants.ProviderName,
                 ResultLanguage = Constants.ProviderMetadataLanguage
             };
 
-            if (!SeasonMetadataProvider.TryGetSeriesId(info?.SeriesProviderIds, out var seriesId)
+            if (info == null
+                || !SeasonMetadataProvider.TryGetSeriesId(info.SeriesProviderIds, out var seriesId)
                 || !info.ParentIndexNumber.HasValue
                 || !info.IndexNumber.HasValue)
                 return result;
@@ -50,7 +53,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             if (episode == null)
                 return result;
 
-            var item = new Episode
+            var item = new JellyfinEpisode
             {
                 ParentIndexNumber = episode.SeasonNumber,
                 IndexNumber = episode.EpisodeNumber,
