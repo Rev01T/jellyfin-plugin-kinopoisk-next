@@ -148,6 +148,12 @@ namespace KinopoiskUnofficialInfo.ApiClient
             return Invoke(ct => GetJson<ApiKeyInfoResponse>($"/api/v1/api_keys/{escapedKey}", ct), cancellationToken);
         }
 
+        public Task<SeasonResponse> GetSeasons(int filmId, CancellationToken? cancellationToken = null)
+            => Invoke(ct => _apiClient.SeasonsAsync(filmId, ct), cancellationToken);
+
+        public Task<DistributionResponse> GetDistributions(int filmId, CancellationToken? cancellationToken = null)
+            => Invoke(ct => _apiClient.DistributionsAsync(filmId, ct), cancellationToken);
+
         public Task<ICollection<StaffResponse>> GetStaff(int filmId, CancellationToken? cancellationToken = null)
             => Invoke(ct => _apiClient.StaffAllAsync(filmId, ct), cancellationToken);
 
