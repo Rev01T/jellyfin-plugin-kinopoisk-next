@@ -43,12 +43,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             var response = await _apiClient.GetSeasons(seriesId, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
 
-            var episode = response?.Items?
-                .Where(season => season != null && season.Number == info.ParentIndexNumber.Value)
-                .SelectMany(season => season.Episodes ?? Enumerable.Empty<KinopoiskUnofficialInfo.ApiClient.Episode>())
-                .FirstOrDefault(item => item != null
-                    && item.SeasonNumber == info.ParentIndexNumber.Value
-                    && item.EpisodeNumber == info.IndexNumber.Value);
+            var episode = FindEpisode(response, info.ParentIndexNumber.Value, info.IndexNumber.Value);
 
             if (episode == null)
                 return result;
@@ -67,6 +62,14 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             result.HasMetadata = true;
             return result;
         }
+
+        internal static KinopoiskUnofficialInfo.ApiClient.Episode FindEpisode(SeasonResponse response, int seasonNumber, int episodeNumber)
+            => response?.Items?
+                .Where(season => season != null && season.Number == seasonNumber)
+                .SelectMany(season => season.Episodes ?? Enumerable.Empty<KinopoiskUnofficialInfo.ApiClient.Episode>())
+                .FirstOrDefault(item => item != null
+                    && item.SeasonNumber == seasonNumber
+                    && item.EpisodeNumber == episodeNumber);
 
         public Task<IEnumerable<RemoteSearchResult>> GetSearchResults(EpisodeInfo searchInfo, CancellationToken cancellationToken)
             => Task.FromResult(Enumerable.Empty<RemoteSearchResult>());
