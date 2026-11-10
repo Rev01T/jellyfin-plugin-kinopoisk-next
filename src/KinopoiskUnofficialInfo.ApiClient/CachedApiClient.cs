@@ -46,6 +46,12 @@ namespace KinopoiskUnofficialInfo.ApiClient
             return TryGetValue(GenerateKey(nameof(GetApiKeyInfo), keyHash), c => c.GetApiKeyInfo(apiKey, cancellationToken), TimeSpan.FromMinutes(15));
         }
 
+        public Task<SeasonResponse> GetSeasons(int filmId, CancellationToken? cancellationToken = null)
+            => TryGetValue(GenerateKey(nameof(GetSeasons), filmId), c => c.GetSeasons(filmId, cancellationToken));
+
+        public Task<DistributionResponse> GetDistributions(int filmId, CancellationToken? cancellationToken = null)
+            => TryGetValue(GenerateKey(nameof(GetDistributions), filmId), c => c.GetDistributions(filmId, cancellationToken));
+
         public Task<ICollection<StaffResponse>> GetStaff(int filmId, CancellationToken? cancellationToken = null)
             => TryGetValue(GenerateKey(nameof(GetStaff), filmId), c => c.GetStaff(filmId, cancellationToken));
 
