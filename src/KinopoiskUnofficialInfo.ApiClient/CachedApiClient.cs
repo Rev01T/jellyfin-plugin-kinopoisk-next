@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,6 +33,19 @@ namespace KinopoiskUnofficialInfo.ApiClient
         public Task<Film> GetSingleFilm(int filmId, CancellationToken? cancellationToken = null)
             => TryGetValue(GenerateKey(nameof(GetSingleFilm), filmId), c => c.GetSingleFilm(filmId, cancellationToken));
 
+        public Task<FilmSearchByFiltersResponse> GetFilmByImdbId(string imdbId, CancellationToken? cancellationToken = null)
+            => TryGetValue(GenerateKey(nameof(GetFilmByImdbId), imdbId), c => c.GetFilmByImdbId(imdbId, cancellationToken));
+
+        public Task<ApiKeyInfoResponse> GetApiKeyInfo(string apiKey, CancellationToken? cancellationToken = null)
+        {
+            if (string.IsNullOrWhiteSpace(apiKey))
+                throw new ArgumentException("API key is required.", nameof(apiKey));
+
+            // Never put the API key itself into an IMemoryCache key or diagnostic log.
+            var keyHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(apiKey.Trim())));
+            return TryGetValue(GenerateKey(nameof(GetApiKeyInfo), keyHash), c => c.GetApiKeyInfo(apiKey, cancellationToken), TimeSpan.FromMinutes(15));
+        }
+
         public Task<ICollection<StaffResponse>> GetStaff(int filmId, CancellationToken? cancellationToken = null)
             => TryGetValue(GenerateKey(nameof(GetStaff), filmId), c => c.GetStaff(filmId, cancellationToken));
 
@@ -52,12 +66,12 @@ namespace KinopoiskUnofficialInfo.ApiClient
             return key.ToString();
         }
 
-        private Task<T> TryGetValue<T>(string key, Func<IKinopoiskApiClient, Task<T>> resultFactory)
+        private Task<T> TryGetValue<T>(string key, Func<IKinopoiskApiClient, Task<T>> resultFactory, TimeSpan? expiration = null)
         {
             return _cache.GetOrCreateAsync(key, async entry =>
             {
-                _logger.LogDebug("Cache entry '{CacheKey}' not found; requesting from server", key);
-                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(10);
+                _logger.LogDebug("Cache entry for {CacheEntryType} not found; requesting from server", typeof(T).Name);
+                entry.AbsoluteExpirationRelativeToNow = expiration ?? TimeSpan.FromMinutes(10);
                 // Exceptions are deliberately allowed to propagate. In particular, quota and
                 // authentication failures must not be cached as successful empty API responses.
                 return await resultFactory(_innerClient).ConfigureAwait(false);
