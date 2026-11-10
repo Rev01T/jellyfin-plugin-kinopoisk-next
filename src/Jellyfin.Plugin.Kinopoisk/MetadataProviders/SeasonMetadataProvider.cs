@@ -40,7 +40,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             var response = await _apiClient.GetSeasons(seriesId, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
 
-            var season = response?.Items?.FirstOrDefault(item => item != null && item.Number == info.IndexNumber.Value);
+            var season = FindSeason(response, info.IndexNumber.Value);
             if (season == null)
                 return result;
 
@@ -58,6 +58,9 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
 
         public Task<IEnumerable<RemoteSearchResult>> GetSearchResults(SeasonInfo searchInfo, CancellationToken cancellationToken)
             => Task.FromResult(Enumerable.Empty<RemoteSearchResult>());
+
+        internal static KinopoiskUnofficialInfo.ApiClient.Season FindSeason(SeasonResponse response, int seasonNumber)
+            => response?.Items?.FirstOrDefault(item => item != null && item.Number == seasonNumber);
 
         internal static bool TryGetSeriesId(IDictionary<string, string> providerIds, out int seriesId)
         {
