@@ -57,6 +57,7 @@ namespace KinopoiskUnofficialInfo.ApiClient
 
         public Task<VideoResponse> GetTrailers(int filmId, CancellationToken? cancellationToken = null)
             => TryGetValue(GenerateKey(nameof(GetTrailers), filmId), c => c.GetTrailers(filmId, cancellationToken));
+
         public Task<FilmSearchResponse> SearchByKeyword(string keyword, int page = 1, CancellationToken? cancellationToken = null)
             => TryGetValue(GenerateKey(nameof(SearchByKeyword), keyword, page), c => c.SearchByKeyword(keyword, page, cancellationToken));
 
