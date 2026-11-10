@@ -61,7 +61,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
                 Overview = episode.Synopsis,
                 PremiereDate = episode.ReleaseDate.ParseDate()
             };
-            item.SetProviderId(Constants.ProviderId, seriesId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            item.ProviderIds[Constants.ProviderId] = seriesId.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
             result.Item = item;
             result.HasMetadata = true;
