@@ -17,22 +17,6 @@
                         </div>
                     </div>
 
-                    <h2>Изображения</h2>
-                    <div class="checkboxContainer">
-                        <label>
-                            <input id="EnableAlternativePosters" name="EnableAlternativePosters" type="checkbox" is="emby-checkbox" />
-                            <span>Загружать альтернативные постеры</span>
-                        </label>
-                        <div class="fieldDescription">Дополнительно запрашивать постеры из галереи КиноПоиска. Увеличивает расход API-квоты.</div>
-                    </div>
-                    <div class="checkboxContainer">
-                        <label>
-                            <input id="EnableBackdropImages" name="EnableBackdropImages" type="checkbox" is="emby-checkbox" />
-                            <span>Загружать фоновые изображения</span>
-                        </label>
-                        <div class="fieldDescription">Запрашивать изображения WALLPAPER, а при их отсутствии — COVER. Увеличивает расход API-квоты.</div>
-                    </div>
-
                     <div>
                         <button is="emby-button" type="submit" class="raised button-submit block emby-button">
                             <span>Сохранить</span>
@@ -50,8 +34,6 @@
                 Dashboard.showLoadingMsg();
                 ApiClient.getPluginConfiguration(KinopoiskPluginConfig.pluginUniqueId).then(function (config) {
                     $('#ApiToken').val(config.ApiToken).change();
-                    $('#EnableAlternativePosters').prop('checked', config.EnableAlternativePosters === true).change();
-                    $('#EnableBackdropImages').prop('checked', config.EnableBackdropImages === true).change();
                     Dashboard.hideLoadingMsg();
                 });
             });
@@ -60,8 +42,6 @@
                 Dashboard.showLoadingMsg();
                 ApiClient.getPluginConfiguration(KinopoiskPluginConfig.pluginUniqueId).then(function (config) {
                     config.ApiToken = $('#ApiToken').val();
-                    config.EnableAlternativePosters = $('#EnableAlternativePosters').prop('checked');
-                    config.EnableBackdropImages = $('#EnableBackdropImages').prop('checked');
                     ApiClient.updatePluginConfiguration(KinopoiskPluginConfig.pluginUniqueId, config).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
                     });
