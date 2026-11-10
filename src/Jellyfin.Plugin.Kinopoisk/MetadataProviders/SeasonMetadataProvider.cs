@@ -49,7 +49,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
                 IndexNumber = season.Number,
                 Name = season.Number == 0 ? "Specials" : $"Season {season.Number}"
             };
-            item.SetProviderId(Constants.ProviderId, seriesId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            item.ProviderIds[Constants.ProviderId] = seriesId.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
             result.Item = item;
             result.HasMetadata = true;
