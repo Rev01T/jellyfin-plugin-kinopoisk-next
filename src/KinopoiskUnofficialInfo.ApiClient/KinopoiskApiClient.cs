@@ -100,8 +100,53 @@ namespace KinopoiskUnofficialInfo.ApiClient
             }
         }
 
+        private async Task<T> GetJson<T>(string relativeUrl, CancellationToken cancellationToken)
+        {
+            var requestUri = new Uri(_apiClient.BaseUrl.TrimEnd('/') + relativeUrl, UriKind.Absolute);
+            using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
+            using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            var responseBody = response.Content == null
+                ? string.Empty
+                : await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var headers = response.Headers
+                    .Concat(response.Content?.Headers ?? Enumerable.Empty<KeyValuePair<string, IEnumerable<string>>>())
+                    .GroupBy(header => header.Key, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(group => group.Key, group => group.First().Value, StringComparer.OrdinalIgnoreCase);
+                throw new ApiException(
+                    $"Kinopoisk API request failed with HTTP {(int)response.StatusCode}.",
+                    (int)response.StatusCode,
+                    responseBody,
+                    headers,
+                    null);
+            }
+
+            return JsonConvert.DeserializeObject<T>(responseBody)
+                ?? throw new ApiException("Kinopoisk API returned an empty response.", (int)response.StatusCode, responseBody, new Dictionary<string, IEnumerable<string>>(), null);
+        }
+
         public Task<Film> GetSingleFilm(int filmId, CancellationToken? cancellationToken = null)
             => Invoke(ct => _apiClient.FilmsAsync(filmId, ct), cancellationToken);
+
+        public Task<FilmSearchByFiltersResponse> GetFilmByImdbId(string imdbId, CancellationToken? cancellationToken = null)
+        {
+            if (string.IsNullOrWhiteSpace(imdbId))
+                throw new ArgumentException("IMDb ID is required.", nameof(imdbId));
+
+            var query = Uri.EscapeDataString(imdbId.Trim());
+            return Invoke(ct => GetJson<FilmSearchByFiltersResponse>($"/api/v2.2/films?imdbId={query}", ct), cancellationToken);
+        }
+
+        public Task<ApiKeyInfoResponse> GetApiKeyInfo(string apiKey, CancellationToken? cancellationToken = null)
+        {
+            if (string.IsNullOrWhiteSpace(apiKey))
+                throw new ArgumentException("API key is required.", nameof(apiKey));
+
+            var escapedKey = Uri.EscapeDataString(apiKey.Trim());
+            return Invoke(ct => GetJson<ApiKeyInfoResponse>($"/api/v1/api_keys/{escapedKey}", ct), cancellationToken);
+        }
 
         public Task<ICollection<StaffResponse>> GetStaff(int filmId, CancellationToken? cancellationToken = null)
             => Invoke(ct => _apiClient.StaffAllAsync(filmId, ct), cancellationToken);
@@ -123,32 +168,7 @@ namespace KinopoiskUnofficialInfo.ApiClient
 
             var escapedType = Uri.EscapeDataString(type.Trim().ToUpperInvariant());
             var relativeUrl = $"/api/v2.2/films/{filmId}/images?type={escapedType}&page={page}";
-            return Invoke(async ct =>
-            {
-                var requestUri = new Uri(_apiClient.BaseUrl.TrimEnd('/') + relativeUrl, UriKind.Absolute);
-                using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-                using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
-                var responseBody = response.Content == null
-                    ? string.Empty
-                    : await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    var headers = response.Headers
-                        .Concat(response.Content?.Headers ?? Enumerable.Empty<KeyValuePair<string, IEnumerable<string>>>())
-                        .GroupBy(header => header.Key, StringComparer.OrdinalIgnoreCase)
-                        .ToDictionary(group => group.Key, group => group.First().Value, StringComparer.OrdinalIgnoreCase);
-                    throw new ApiException(
-                        $"Kinopoisk image request failed with HTTP {(int)response.StatusCode}.",
-                        (int)response.StatusCode,
-                        responseBody,
-                        headers,
-                        null);
-                }
-
-                return JsonConvert.DeserializeObject<FilmImagesResponse>(responseBody)
-                    ?? new FilmImagesResponse();
-            }, cancellationToken);
+            return Invoke(ct => GetJson<FilmImagesResponse>(relativeUrl, ct), cancellationToken);
         }
 
         public Task<VideoResponse> GetTrailers(int filmId, CancellationToken? cancellationToken = null)
