@@ -18,7 +18,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
     {
         private const int MaxConcurrentImageChecks = 8;
         private readonly ILogger _logger;
-        private readonly IKinopoiskApiClient _apiClient;
+        protected readonly IKinopoiskApiClient _apiClient;
         private readonly IProviderIdResolver<TLookupInfoType> _providerIdResolver;
 
         public BaseVideoMetadataProvider(IKinopoiskApiClient kinopoiskApiClient, IProviderIdResolver<TLookupInfoType> providerIdResolver, ILogger logger, System.Net.Http.IHttpClientFactory httpClientFactory)
@@ -30,6 +30,9 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
         }
 
         protected abstract TItemType ConvertResponseToItem(Film apiResponse);
+
+        protected virtual Task EnrichItem(TItemType item, int kinopoiskId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
 
         public async Task<MetadataResult<TItemType>> GetMetadata(TLookupInfoType info, CancellationToken cancellationToken)
         {
@@ -51,7 +54,10 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
 
             result.Item = ConvertResponseToItem(film);
             if (result.Item != null)
+            {
+                await EnrichItem(result.Item, kinopoiskId, cancellationToken).ConfigureAwait(false);
                 result.HasMetadata = true;
+            }
 
             var staff = await _apiClient.GetStaff(kinopoiskId, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();

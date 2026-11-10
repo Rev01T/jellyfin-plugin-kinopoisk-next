@@ -1,4 +1,7 @@
+using System;
 using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using Jellyfin.Plugin.Kinopoisk.ProviderIdResolvers;
 using KinopoiskUnofficialInfo.ApiClient;
 using MediaBrowser.Controller.Entities.TV;
@@ -16,5 +19,15 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
 
         protected override Series ConvertResponseToItem(Film apiResponse)
             => apiResponse.ToSeries();
+
+        protected override async Task EnrichItem(Series item, int kinopoiskId, CancellationToken cancellationToken)
+        {
+            var distributions = await _apiClient.GetDistributions(kinopoiskId, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var premiereDate = distributions.GetPremiereDate();
+            if (premiereDate.HasValue)
+                item.PremiereDate = premiereDate.Value;
+        }
     }
 }

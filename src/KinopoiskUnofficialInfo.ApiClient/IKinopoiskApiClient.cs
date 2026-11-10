@@ -10,6 +10,8 @@ namespace KinopoiskUnofficialInfo.ApiClient
         Task<Film> GetSingleFilm(int filmId, CancellationToken? cancellationToken = null);
         Task<FilmSearchByFiltersResponse> GetFilmByImdbId(string imdbId, CancellationToken? cancellationToken = null);
         Task<ApiKeyInfoResponse> GetApiKeyInfo(string apiKey, CancellationToken? cancellationToken = null);
+        Task<SeasonResponse> GetSeasons(int filmId, CancellationToken? cancellationToken = null);
+        Task<DistributionResponse> GetDistributions(int filmId, CancellationToken? cancellationToken = null);
         Task<ICollection<StaffResponse>> GetStaff(int filmId, CancellationToken? cancellationToken = null);
         Task<VideoResponse> GetTrailers(int filmId, CancellationToken? cancellationToken = null);
         Task<FilmImagesResponse> GetImages(int filmId, string type, int page = 1, CancellationToken? cancellationToken = null);

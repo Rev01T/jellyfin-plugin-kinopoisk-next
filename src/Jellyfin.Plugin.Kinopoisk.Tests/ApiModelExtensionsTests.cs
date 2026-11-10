@@ -167,6 +167,51 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
             Assert.Equal(PersonKind.Director, StaffResponseProfessionKey.DIRECTOR.ToPersonType());
         }
 
+        [Fact]
+        public void DistributionPremiereDatePrefersWorldPremiere()
+        {
+            var distributions = new DistributionResponse
+            {
+                Items = new List<Distribution>
+                {
+                    new Distribution { Type = DistributionType.PREMIERE, Date = "2020-02-01" },
+                    new Distribution { Type = DistributionType.WORLD_PREMIER, Date = "2020-03-01" },
+                    new Distribution { Type = DistributionType.WORLD_PREMIER, Date = "2020-03-02" }
+                }
+            };
+
+            Assert.Equal(new System.DateTime(2020, 3, 1), distributions.GetPremiereDate());
+        }
+
+        [Fact]
+        public void DistributionPremiereDateFallsBackToPremiere()
+        {
+            var distributions = new DistributionResponse
+            {
+                Items = new List<Distribution>
+                {
+                    new Distribution { Type = DistributionType.ALL, Date = "2020-01-01" },
+                    new Distribution { Type = DistributionType.PREMIERE, Date = "2020-02-01" }
+                }
+            };
+
+            Assert.Equal(new System.DateTime(2020, 2, 1), distributions.GetPremiereDate());
+        }
+
+        [Fact]
+        public void DistributionPremiereDateReturnsNullWhenNoRelevantDateExists()
+        {
+            var distributions = new DistributionResponse
+            {
+                Items = new List<Distribution>
+                {
+                    new Distribution { Type = DistributionType.ALL, Date = "2020-01-01" }
+                }
+            };
+
+            Assert.Null(distributions.GetPremiereDate());
+        }
+
         private static StaffResponse CreateStaff(
             int id,
             string nameRu,

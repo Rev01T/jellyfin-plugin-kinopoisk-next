@@ -332,6 +332,29 @@ namespace Jellyfin.Plugin.Kinopoisk
             return null;
         }
 
+        public static DateTime? GetPremiereDate(this DistributionResponse src)
+        {
+            if (src?.Items is null)
+                return null;
+
+            var worldPremiere = src.Items
+                .Where(distribution => distribution != null && distribution.Type == DistributionType.WORLD_PREMIER)
+                .Select(distribution => distribution.Date.ParseDate())
+                .Where(date => date.HasValue)
+                .OrderBy(date => date.Value)
+                .FirstOrDefault();
+
+            if (worldPremiere.HasValue)
+                return worldPremiere;
+
+            return src.Items
+                .Where(distribution => distribution != null && distribution.Type == DistributionType.PREMIERE)
+                .Select(distribution => distribution.Date.ParseDate())
+                .Where(date => date.HasValue)
+                .OrderBy(date => date.Value)
+                .FirstOrDefault();
+        }
+
         public static DateTime? GetPremiereDate(this Film src)
         {
             // var res = src.IsRussianSpokenOriginated()
