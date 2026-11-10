@@ -13,6 +13,7 @@ namespace KinopoiskUnofficialInfo.ApiClient
         Task<SeasonResponse> GetSeasons(int filmId, CancellationToken? cancellationToken = null);
         Task<DistributionResponse> GetDistributions(int filmId, CancellationToken? cancellationToken = null);
         Task<ICollection<StaffResponse>> GetStaff(int filmId, CancellationToken? cancellationToken = null);
-        Task<VideoResponse> GetTrailers(int filmId, CancellationToken? cancellationToken = null);        Task<FilmSearchResponse> SearchByKeyword(string keyword, int page = 1, CancellationToken? cancellationToken = null);
+        Task<VideoResponse> GetTrailers(int filmId, CancellationToken? cancellationToken = null);
+        Task<FilmSearchResponse> SearchByKeyword(string keyword, int page = 1, CancellationToken? cancellationToken = null);
     }
 }
