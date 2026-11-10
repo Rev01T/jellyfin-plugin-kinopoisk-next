@@ -47,7 +47,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             var item = new JellyfinSeason
             {
                 IndexNumber = season.Number,
-                Name = season.Number == 0 ? "Specials" : $"Season {season.Number}"
+                Name = season.Number == 0 ? "Спецвыпуски" : $"Сезон {season.Number}"
             };
             item.ProviderIds[Constants.ProviderId] = seriesId.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
