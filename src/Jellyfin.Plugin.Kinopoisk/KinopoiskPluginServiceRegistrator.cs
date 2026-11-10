@@ -55,6 +55,8 @@ namespace Jellyfin.Plugin.Kinopoisk
             // from DI; loading the plugin assembly alone does not activate them.
             serviceCollection.AddSingleton<IMetadataProvider, MovieMetadataProvider>();
             serviceCollection.AddSingleton<IMetadataProvider, SeriesMetadataProvider>();
+            serviceCollection.AddSingleton<IMetadataProvider, SeasonMetadataProvider>();
+            serviceCollection.AddSingleton<IMetadataProvider, EpisodeMetadataProvider>();
             serviceCollection.AddSingleton<IMetadataProvider, PersonMetadataProvider>();
 
             serviceCollection.AddSingleton<IRemoteImageProvider, VideoImageProvider>();
