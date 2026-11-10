@@ -44,12 +44,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             if (season == null)
                 return result;
 
-            var item = new JellyfinSeason
-            {
-                IndexNumber = season.Number,
-                Name = season.Number == 0 ? "Спецвыпуски" : $"Сезон {season.Number}"
-            };
-            item.ProviderIds[Constants.ProviderId] = seriesId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var item = CreateSeasonItem(season, seriesId);
 
             result.Item = item;
             result.HasMetadata = true;
@@ -58,6 +53,17 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
 
         public Task<IEnumerable<RemoteSearchResult>> GetSearchResults(SeasonInfo searchInfo, CancellationToken cancellationToken)
             => Task.FromResult(Enumerable.Empty<RemoteSearchResult>());
+
+        internal static JellyfinSeason CreateSeasonItem(KinopoiskUnofficialInfo.ApiClient.Season season, int seriesId)
+        {
+            var item = new JellyfinSeason
+            {
+                IndexNumber = season.Number,
+                Name = season.Number == 0 ? "Спецвыпуски" : $"Сезон {season.Number}"
+            };
+            item.ProviderIds[Constants.ProviderId] = seriesId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return item;
+        }
 
         internal static KinopoiskUnofficialInfo.ApiClient.Season FindSeason(SeasonResponse response, int seasonNumber)
             => response?.Items?.FirstOrDefault(item => item != null && item.Number == seasonNumber);
