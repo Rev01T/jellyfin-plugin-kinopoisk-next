@@ -22,92 +22,71 @@ namespace Jellyfin.Plugin.Kinopoisk.ProviderIdResolvers
 
         public override async Task<(bool IsSuccess, int ProviderId)> TryResolve(T info, CancellationToken? ct = null)
         {
-            // Try to get from standart sources
             var possibleResult = await base.TryResolve(info, ct);
             if (possibleResult.IsSuccess)
                 return possibleResult;
 
-            // Trying to find empirically on kinopoisk
-            if (string.IsNullOrWhiteSpace(info.Name))
+            // Prefer the API's IMDb filter. This replaces one full-film request per
+            // keyword candidate and therefore avoids N additional quota-consuming calls.
+            if (info.TryGetProviderId(MetadataProvider.Imdb, out var imdbId) && !string.IsNullOrWhiteSpace(imdbId))
             {
-                _logger.LogDebug($"Film name is empty, skipping KinopoiskProviderId search");
-                return (false, 0);
-            }
-
-            _logger.LogDebug($"Trying to get suitable film with name '{info.Name}'...");
-            var searchResult = await _kinopoiskApiClient.SearchByKeyword(info.Name, 1, ct ?? CancellationToken.None);
-            if (searchResult.SearchFilmsCountResult < 1 || searchResult?.Films.Count < 1)
-            {
-                _logger.LogDebug($"Received empty search result");
-                return (false, 0);
-            }
-            var candidates = searchResult.Films.ToArray();
-            _logger.LogDebug($"Received {candidates.Length} results, trying to filter and match...");
-
-            var candidates_by_year = FilterByYear(info, candidates);
-
-            // Check if there are single candidate filtered by year
-            possibleResult = await TryResolveBySingleCandidateLeft(info, candidates_by_year, ct);
-            if (possibleResult.IsSuccess)
-                return possibleResult;
-
-            // Try to resolve by ImdbId match filtered by year
-            possibleResult = await TryResolveByImdbMatch(info, candidates_by_year, ct);
-            if (possibleResult.IsSuccess)
-                return possibleResult;
-
-            // Try to resolve by ImdbId match without filtering
-            possibleResult = await TryResolveByImdbMatch(info, candidates, ct);
-            if (possibleResult.IsSuccess)
-                return possibleResult;
-
-            // TODO: Maybe check type?
-
-            if (0 < candidates_by_year.Count)
-            {
-                var kinopoiskId = candidates_by_year.First().FilmId;
-                _logger.LogDebug($"All other checks failed, use first result by year, setting KinopoiskProviderId to {kinopoiskId} ({info.Name})");
-                return (true, kinopoiskId);
-            }
-
-            if (0 < candidates.Length)
-            {
-                var kinopoiskId = candidates.First().FilmId;
-                _logger.LogDebug($"All other checks failed, use first result, setting KinopoiskProviderId to {kinopoiskId} ({info.Name})");
-                return (true, kinopoiskId);
-            }
-
-            _logger.LogDebug($"Suitable result not found");
-            return (false, 0);
-        }
-
-        public async Task<(bool IsSuccess, int ProviderId)> TryResolveByImdbMatch(T info, ICollection<FilmSearchResponse_films> candidates, CancellationToken? ct = null)
-        {
-            if (info.TryGetProviderId(MetadataProvider.Imdb, out var imdbId))
-            {
-                _logger.LogDebug($"Trying to find result with ImdbId '{imdbId}'...");
-                var index = 0;
-                foreach (var candidate in candidates)
+                try
                 {
-                    try
+                    _logger.LogDebug("Trying direct Kinopoisk lookup by IMDb ID '{ImdbId}'...", imdbId);
+                    var imdbResult = await _kinopoiskApiClient.GetFilmByImdbId(imdbId, ct);
+                    if (imdbResult?.Films?.Count == 1)
                     {
-                        var film = await _kinopoiskApiClient.GetSingleFilm(candidate.FilmId, ct);
-
-                        if (imdbId == film?.ImdbId)
-                        {
-                            _logger.LogDebug($"Found match: {candidate.FilmId} '{film.GetLocalName()}', ImdbId '{film?.ImdbId}', setting KinopoiskProviderId to {candidate.FilmId}");
-                            return (true, candidate.FilmId);
-                        }
-
-                        _logger.LogDebug($"Film {candidate.FilmId} '{film.GetLocalName()}' has ImdbId '{film?.ImdbId}', skipping, {candidates.Count - ++index} candidates left...");
-                    } catch (Exception e)
-                    {
-                        _logger.LogError(e, $"Error while retrieving film {candidate.FilmId}");
-                        continue;
+                        var match = imdbResult.Films.Single();
+                        _logger.LogDebug("IMDb ID '{ImdbId}' resolved to Kinopoisk ID {KinopoiskId}", imdbId, match.FilmId);
+                        return (true, match.FilmId);
                     }
+
+                    if (imdbResult?.Films?.Count > 1)
+                        _logger.LogWarning("IMDb lookup for '{ImdbId}' returned {Count} results; falling back to title search", imdbId, imdbResult.Films.Count);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogWarning(e, "Direct Kinopoisk lookup by IMDb ID failed; falling back to title search");
                 }
             }
 
+            if (string.IsNullOrWhiteSpace(info.Name))
+            {
+                _logger.LogDebug("Film name is empty, skipping KinopoiskProviderId search");
+                return (false, 0);
+            }
+
+            _logger.LogDebug("Trying to get suitable film with name '{Name}'...", info.Name);
+            var searchResult = await _kinopoiskApiClient.SearchByKeyword(info.Name, 1, ct ?? CancellationToken.None);
+            if (searchResult.SearchFilmsCountResult < 1 || searchResult?.Films.Count < 1)
+            {
+                _logger.LogDebug("Received empty search result");
+                return (false, 0);
+            }
+
+            var candidates = searchResult.Films.ToArray();
+            _logger.LogDebug("Received {CandidateCount} results, trying to filter and match...", candidates.Length);
+            var candidatesByYear = FilterByYear(info, candidates);
+
+            possibleResult = await TryResolveBySingleCandidateLeft(info, candidatesByYear, ct);
+            if (possibleResult.IsSuccess)
+                return possibleResult;
+
+            if (candidatesByYear.Count > 0)
+            {
+                var kinopoiskId = candidatesByYear.First().FilmId;
+                _logger.LogDebug("All other checks failed, use first result by year, setting KinopoiskProviderId to {KinopoiskId} ({Name})", kinopoiskId, info.Name);
+                return (true, kinopoiskId);
+            }
+
+            if (candidates.Length > 0)
+            {
+                var kinopoiskId = candidates.First().FilmId;
+                _logger.LogDebug("All other checks failed, use first result, setting KinopoiskProviderId to {KinopoiskId} ({Name})", kinopoiskId, info.Name);
+                return (true, kinopoiskId);
+            }
+
+            _logger.LogDebug("Suitable result not found");
             return (false, 0);
         }
 
@@ -116,7 +95,7 @@ namespace Jellyfin.Plugin.Kinopoisk.ProviderIdResolvers
             if (candidates.Count == 1)
             {
                 var kinopoiskId = candidates.Single().FilmId;
-                _logger.LogDebug($"There is single candidate left, setting KinopoiskProviderId to {kinopoiskId} ({info.Name})");
+                _logger.LogDebug("There is single candidate left, setting KinopoiskProviderId to {KinopoiskId} ({Name})", kinopoiskId, info.Name);
                 return Task.FromResult((true, kinopoiskId));
             }
 
@@ -127,14 +106,14 @@ namespace Jellyfin.Plugin.Kinopoisk.ProviderIdResolvers
         {
             if (!info.Year.HasValue)
             {
-                _logger.LogDebug($"Can't filter by year, no year set in metadata...");
+                _logger.LogDebug("Can't filter by year, no year set in metadata");
                 return Array.Empty<FilmSearchResponse_films>();
             }
 
             var targetYear = info.Year.Value.ToString();
-            var res = candidates.Where(f => f.Year == targetYear).ToArray();
-            _logger.LogDebug($"Filtered by year {targetYear}, {res.Length} results left...");
-            return res;
+            var result = candidates.Where(f => f.Year == targetYear).ToArray();
+            _logger.LogDebug("Filtered by year {Year}, {Count} results left", targetYear, result.Length);
+            return result;
         }
     }
 }
