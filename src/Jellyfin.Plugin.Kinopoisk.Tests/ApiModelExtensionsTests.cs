@@ -190,7 +190,7 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
             {
                 Items = new List<Distribution>
                 {
-                    new Distribution { Type = DistributionType.DIGITAL, Date = "2020-01-01" },
+                    new Distribution { Type = DistributionType.ALL, Date = "2020-01-01" },
                     new Distribution { Type = DistributionType.PREMIERE, Date = "2020-02-01" }
                 }
             };
@@ -205,7 +205,7 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
             {
                 Items = new List<Distribution>
                 {
-                    new Distribution { Type = DistributionType.DIGITAL, Date = "2020-01-01" }
+                    new Distribution { Type = DistributionType.ALL, Date = "2020-01-01" }
                 }
             };
 
