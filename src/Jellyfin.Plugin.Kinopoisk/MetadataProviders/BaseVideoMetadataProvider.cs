@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.Kinopoisk.Configuration;
 using Jellyfin.Plugin.Kinopoisk.ProviderIdResolvers;
 using KinopoiskUnofficialInfo.ApiClient;
 using MediaBrowser.Controller.Entities;
@@ -30,6 +31,34 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
         }
 
         protected abstract TItemType ConvertResponseToItem(Film apiResponse);
+
+        /// <summary>
+        /// Replaces the year-based premiere date with the exact date from the film distributions,
+        /// according to the "premiere date" plugin setting. Costs one API request.
+        /// </summary>
+        protected async Task ApplyDistributionPremiereDate(BaseItem item, int kinopoiskId, CancellationToken cancellationToken)
+        {
+            var source = Plugin.Instance?.Configuration?.PremiereDateSource ?? PremiereDateSource.World;
+            if (source == PremiereDateSource.YearOnly)
+                return;
+
+            var distributions = await _apiClient.GetDistributions(kinopoiskId, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (distributions?.Items != null && _logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug(
+                    "Kinopoisk id {KinopoiskId} distributions (type/subType/country/date): {Distributions}",
+                    kinopoiskId,
+                    string.Join("; ", distributions.Items
+                        .Where(d => d != null)
+                        .Select(d => $"{d.Type}/{d.SubType}/{d.Country?.Country1}/{d.Date}{(d.ReRelease ? "/re-release" : string.Empty)}")));
+            }
+
+            var premiereDate = distributions.GetPremiereDate(source);
+            if (premiereDate.HasValue)
+                item.PremiereDate = premiereDate.Value;
+        }
 
         protected virtual Task EnrichItem(TItemType item, int kinopoiskId, CancellationToken cancellationToken)
             => Task.CompletedTask;

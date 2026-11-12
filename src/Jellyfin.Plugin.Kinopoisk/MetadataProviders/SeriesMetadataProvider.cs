@@ -20,14 +20,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
         protected override Series ConvertResponseToItem(Film apiResponse)
             => apiResponse.ToSeries();
 
-        protected override async Task EnrichItem(Series item, int kinopoiskId, CancellationToken cancellationToken)
-        {
-            var distributions = await _apiClient.GetDistributions(kinopoiskId, cancellationToken).ConfigureAwait(false);
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var premiereDate = distributions.GetPremiereDate();
-            if (premiereDate.HasValue)
-                item.PremiereDate = premiereDate.Value;
-        }
+        protected override Task EnrichItem(Series item, int kinopoiskId, CancellationToken cancellationToken)
+            => ApplyDistributionPremiereDate(item, kinopoiskId, cancellationToken);
     }
 }
