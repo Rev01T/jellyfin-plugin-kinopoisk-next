@@ -163,20 +163,6 @@ namespace KinopoiskUnofficialInfo.ApiClient
         public Task<PersonResponse> GetPerson(int personId, CancellationToken? cancellationToken = null)
             => Invoke(ct => _apiClient.StaffAsync(personId, ct), cancellationToken);
 
-        public Task<FilmImagesResponse> GetImages(int filmId, string type, int page = 1, CancellationToken? cancellationToken = null)
-        {
-            if (filmId < 1 || filmId > 15000000)
-                throw new ArgumentOutOfRangeException(nameof(filmId));
-            if (page < 1 || page > 20)
-                throw new ArgumentOutOfRangeException(nameof(page));
-            if (string.IsNullOrWhiteSpace(type))
-                throw new ArgumentException("Image type is required.", nameof(type));
-
-            var escapedType = Uri.EscapeDataString(type.Trim().ToUpperInvariant());
-            var relativeUrl = $"/api/v2.2/films/{filmId}/images?type={escapedType}&page={page}";
-            return Invoke(ct => GetJson<FilmImagesResponse>(relativeUrl, ct), cancellationToken);
-        }
-
         public Task<VideoResponse> GetTrailers(int filmId, CancellationToken? cancellationToken = null)
         {
             return Invoke(async ct =>
