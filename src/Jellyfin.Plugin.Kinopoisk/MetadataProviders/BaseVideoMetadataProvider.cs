@@ -55,24 +55,73 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             result.Item = ConvertResponseToItem(film);
             if (result.Item != null)
             {
-                await EnrichItem(result.Item, kinopoiskId, cancellationToken).ConfigureAwait(false);
+                // The main film data is already in hand. Failures of the additional
+                // requests below must not discard it (title, overview, ratings...).
+                await TryOptional(
+                    async () =>
+                    {
+                        await EnrichItem(result.Item, kinopoiskId, cancellationToken).ConfigureAwait(false);
+                        return true;
+                    },
+                    "additional item data",
+                    kinopoiskId,
+                    cancellationToken).ConfigureAwait(false);
                 result.HasMetadata = true;
             }
 
-            var staff = await _apiClient.GetStaff(kinopoiskId, cancellationToken);
+            var staff = await TryOptional(
+                () => _apiClient.GetStaff(kinopoiskId, cancellationToken),
+                "staff",
+                kinopoiskId,
+                cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
 
             var personInfos = staff?.ToPersonInfos() ?? Enumerable.Empty<PersonInfo>();
-            var sanitizedPersons = await SanitizeEmptyImagePersonInfos(personInfos, cancellationToken);
-            foreach (var item in sanitizedPersons)
+            var sanitizedPersons = await TryOptional(
+                () => SanitizeEmptyImagePersonInfos(personInfos, cancellationToken),
+                "person images",
+                kinopoiskId,
+                cancellationToken).ConfigureAwait(false);
+            foreach (var item in sanitizedPersons ?? Enumerable.Empty<PersonInfo>())
                 result.AddPerson(item);
 
-            var trailers = await _apiClient.GetTrailers(kinopoiskId, cancellationToken);
+            var trailers = await TryOptional(
+                () => _apiClient.GetTrailers(kinopoiskId, cancellationToken),
+                "trailers",
+                kinopoiskId,
+                cancellationToken).ConfigureAwait(false);
             var remoteTrailers = trailers.ToMediaUrls();
             if (remoteTrailers is not null && result.Item is not null)
                 result.Item.RemoteTrailers = remoteTrailers;
 
             return result;
+        }
+
+        /// <summary>
+        /// Runs a request that only supplements the metadata. Any failure (quota, network,
+        /// unexpected API response) is logged and replaced by <c>default</c>, so that the
+        /// already obtained film data is still returned to Jellyfin.
+        /// </summary>
+        private async Task<T> TryOptional<T>(System.Func<Task<T>> action, string step, int kinopoiskId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await action().ConfigureAwait(false);
+            }
+            catch (System.OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // A real cancellation (not an HttpClient timeout) must still stop the refresh.
+                throw;
+            }
+            catch (System.Exception e)
+            {
+                _logger.LogWarning(
+                    "Skipping {Step} for Kinopoisk id {KinopoiskId}: {Error}",
+                    step,
+                    kinopoiskId,
+                    e.GetBaseException().Message);
+                return default;
+            }
         }
 
         public async Task<IEnumerable<RemoteSearchResult>> GetSearchResults(TLookupInfoType searchInfo, CancellationToken cancellationToken)

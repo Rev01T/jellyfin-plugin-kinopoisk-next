@@ -15,6 +15,8 @@ namespace KinopoiskUnofficialInfo.ApiClient
             new BadSpouseSexConverter(),
             new BadProductionStatusConverter(),
             new BadFilmSearchResponse_filmsTypeConverter(),
+            new BadDistributionTypeConverter(),
+            new BadDistributionSubTypeConverter(),
         };
 
         protected override IList<JsonProperty> CreateProperties(System.Type type, MemberSerialization memberSerialization)
@@ -30,17 +32,14 @@ namespace KinopoiskUnofficialInfo.ApiClient
                         property.MemberConverter = null;
 #pragma warning restore CS0618
                         property.Converter = badConverter;
-
-                        property.Required = Required.Default;
-                        // property.DefaultValue = -1;
                         break;
                     }
                 }
 
-                if (property.PropertyType == typeof(string))
-                {
-                    property.Required = Required.Default;
-                }
+                // openapi.json marks most properties as required, but the API returns null
+                // (for example distribution country) or omits them. Strictness gives the
+                // plugin nothing, while a single null would discard the whole response.
+                property.Required = Required.Default;
             }
             return list;
         }
