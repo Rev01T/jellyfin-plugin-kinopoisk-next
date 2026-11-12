@@ -17,6 +17,16 @@
                         </div>
                     </div>
 
+                    <div class="selectContainer">
+                        <label class="selectLabel" for="PremiereDateSource">Дата премьеры</label>
+                        <select is="emby-select" id="PremiereDateSource" name="PremiereDateSource" class="emby-select-withcolor emby-select">
+                            <option value="World">Мировая премьера</option>
+                            <option value="Russia">Российская премьера (кино, затем DVD и цифра)</option>
+                            <option value="YearOnly">Только год выпуска (без запросов)</option>
+                        </select>
+                        <div class="fieldDescription">Первые два варианта тратят один дополнительный запрос к API на каждый фильм или сериал. Если российской даты нет, берётся мировая.</div>
+                    </div>
+
                     <div>
                         <button is="emby-button" type="submit" class="raised button-submit block emby-button">
                             <span>Сохранить</span>
@@ -27,13 +37,22 @@
         </div>
         <script type="text/javascript">
             var KinopoiskPluginConfig = {
-                pluginUniqueId: '33e6d249-648f-44cd-a9ce-497be06c08df'
+                pluginUniqueId: '33e6d249-648f-44cd-a9ce-497be06c08df',
+                // The server returns enums as strings, numbers are handled too just in case.
+                premiereDateSourceName: function (value) {
+                    var names = ['World', 'Russia', 'YearOnly'];
+                    if (names.indexOf(value) >= 0)
+                        return value;
+                    var index = parseInt(value, 10);
+                    return names[index] || 'World';
+                }
             };
 
             $('#KinopoiskConfigPage').on('pageshow', function () {
                 Dashboard.showLoadingMsg();
                 ApiClient.getPluginConfiguration(KinopoiskPluginConfig.pluginUniqueId).then(function (config) {
                     $('#ApiToken').val(config.ApiToken).change();
+                    $('#PremiereDateSource').val(KinopoiskPluginConfig.premiereDateSourceName(config.PremiereDateSource));
                     Dashboard.hideLoadingMsg();
                 });
             });
@@ -42,6 +61,7 @@
                 Dashboard.showLoadingMsg();
                 ApiClient.getPluginConfiguration(KinopoiskPluginConfig.pluginUniqueId).then(function (config) {
                     config.ApiToken = $('#ApiToken').val();
+                    config.PremiereDateSource = $('#PremiereDateSource').val();
                     ApiClient.updatePluginConfiguration(KinopoiskPluginConfig.pluginUniqueId, config).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
                     });
