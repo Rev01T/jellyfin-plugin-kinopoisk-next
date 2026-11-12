@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using Jellyfin.Plugin.Kinopoisk.Configuration;
 using KinopoiskUnofficialInfo.ApiClient;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
@@ -315,27 +316,10 @@ namespace Jellyfin.Plugin.Kinopoisk
         }
 
         public static DateTime? GetPremiereDate(this DistributionResponse src)
-        {
-            if (src?.Items is null)
-                return null;
+            => DistributionPremiereDateSelector.Select(src, PremiereDateSource.World);
 
-            var worldPremiere = src.Items
-                .Where(distribution => distribution != null && distribution.Type == DistributionType.WORLD_PREMIER)
-                .Select(distribution => distribution.Date.ParseDate())
-                .Where(date => date.HasValue)
-                .OrderBy(date => date.Value)
-                .FirstOrDefault();
-
-            if (worldPremiere.HasValue)
-                return worldPremiere;
-
-            return src.Items
-                .Where(distribution => distribution != null && distribution.Type == DistributionType.PREMIERE)
-                .Select(distribution => distribution.Date.ParseDate())
-                .Where(date => date.HasValue)
-                .OrderBy(date => date.Value)
-                .FirstOrDefault();
-        }
+        public static DateTime? GetPremiereDate(this DistributionResponse src, PremiereDateSource source)
+            => DistributionPremiereDateSelector.Select(src, source);
 
         public static DateTime? GetPremiereDate(this Film src)
         {
