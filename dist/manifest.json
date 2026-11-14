@@ -9,12 +9,12 @@
     "imageUrl": "https://kinopoisk.userecho.com/s/attachments/28876/0/1/25f8c0315e6ccb2aa6c2642e48f2c9e9.png",
     "versions": [
       {
-        "version": "12.4.0.0",
-        "checksum": "53a42f48d895750b52d6c77d6712b157",
-        "changelog": "\n- Плагин переведён на Jellyfin 12.4: пакеты `Jellyfin.Data`, `Jellyfin.Controller`, `Jellyfin.Common` и `Jellyfin.Model` обновлены до 12.4.0, целевой ABI изменён на 12.4.0.0.\n- Общие зависимости выровнены с Jellyfin 12.4: `Microsoft.Extensions.*` 10.0.14, `Newtonsoft.Json` 13.0.4. Тестовые пакеты `Microsoft.NET.Test.Sdk` 18.11.0 и `coverlet.collector` 10.0.1.\n- Версии в CI и релизном workflow, а также README обновлены под Jellyfin 12.4.\n- Серверам Jellyfin 12.0–12.3 по-прежнему доступна сборка 12.1.0.10, она больше не развивается.\n- Функциональных изменений плагина нет.\n",
+        "version": "12.4.0.1",
+        "checksum": "09966b9a73b3026fcdbd0d1cce1ac114",
+        "changelog": "\n- Тестовый стек обновлён: `xunit` 2.9.3 заменён на `xunit.v3.mtp-off` 4.0.3 (классический режим VSTest, команды `dotnet test` в CI не менялись), `xunit.runner.visualstudio` обновлён до 4.0.1. Тестовые проекты теперь собираются как исполняемые, как требует xunit v3.\n- В существующую конфигурацию Dependabot добавлены группа обновлений тестовых пакетов (`xunit*`, `Microsoft.NET.Test.Sdk`, `coverlet*`, `Moq`, `VCR.net`) и еженедельные обновления GitHub Actions. Прежние правила не менялись: пакеты `Jellyfin.*` обновляются только патчами, `Microsoft.*` без мажорных версий.\n- Функциональных изменений плагина нет.\n",
         "targetAbi": "12.4.0.0",
-        "sourceUrl": "https://github.com/Rev01T/jellyfin-plugin-kinopoisk-next/releases/download/v12.4.0.0/jellyfin-plugin-kinopoisk_12.4.0.0.zip",
-        "timestamp": "2026-11-13T12:11:53Z"
+        "sourceUrl": "https://github.com/Rev01T/jellyfin-plugin-kinopoisk-next/releases/download/v12.4.0.1/jellyfin-plugin-kinopoisk_12.4.0.1.zip",
+        "timestamp": "2026-11-14T15:44:47Z"
       },
       {
         "version": "12.1.0.10",
