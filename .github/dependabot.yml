@@ -17,3 +17,21 @@ updates:
       - dependency-name: "Microsoft.*"
         update-types:
           - version-update:semver-major
+    # Test tooling is updated as one pull request instead of one per package.
+    groups:
+      test-tooling:
+        patterns:
+          - "xunit*"
+          - "Microsoft.NET.Test.Sdk"
+          - "coverlet*"
+          - "Moq"
+          - "VCR.net"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
