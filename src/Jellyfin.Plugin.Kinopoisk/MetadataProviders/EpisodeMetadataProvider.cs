@@ -8,6 +8,7 @@ using MediaBrowser.Common.Net;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Providers;
+using Microsoft.Extensions.Logging;
 using JellyfinEpisode = MediaBrowser.Controller.Entities.TV.Episode;
 
 namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
@@ -18,11 +19,13 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
     public sealed class EpisodeMetadataProvider : BaseMetadataProvider, IRemoteMetadataProvider<JellyfinEpisode, EpisodeInfo>
     {
         private readonly IKinopoiskApiClient _apiClient;
+        private readonly ILogger<EpisodeMetadataProvider> _logger;
 
-        public EpisodeMetadataProvider(IKinopoiskApiClient apiClient, IHttpClientFactory httpClientFactory)
+        public EpisodeMetadataProvider(IKinopoiskApiClient apiClient, IHttpClientFactory httpClientFactory, ILogger<EpisodeMetadataProvider> logger)
             : base(httpClientFactory)
         {
             _apiClient = apiClient ?? throw new System.ArgumentNullException(nameof(apiClient));
+            _logger = logger ?? throw new System.ArgumentNullException(nameof(logger));
         }
 
         public async Task<MetadataResult<JellyfinEpisode>> GetMetadata(EpisodeInfo info, CancellationToken cancellationToken)
@@ -40,7 +43,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
                 || !info.IndexNumber.HasValue)
                 return result;
 
-            var response = await _apiClient.GetSeasons(seriesId, cancellationToken).ConfigureAwait(false);
+            var response = await SeasonMetadataProvider.TryGetSeasons(_apiClient, _logger, seriesId, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
 
             var episode = FindEpisode(response, info.ParentIndexNumber.Value, info.IndexNumber.Value);
