@@ -77,19 +77,50 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
         }
 
         [Fact]
-        public void CriticRatingIsConvertedToZeroToOneHundredScale()
+        public void RfCriticsRatingIsAlreadyAPercentageAndIsNotMultiplied()
         {
-            var film = new Film { RatingRfCritics = 7.8, RatingFilmCritics = 6.5 };
+            // Kinopoisk shows 67%; the API returns 67.0 (not 6.7).
+            var film = new Film { RatingRfCritics = 67.0, RatingFilmCritics = 6.5 };
 
-            Assert.Equal(78f, film.GetCriticRatingAsTenPointBased());
+            Assert.Equal(67f, film.GetCriticRating());
         }
 
         [Fact]
-        public void CriticRatingFallsBackToFilmCriticsWhenRfCriticsMissing()
+        public void RfCriticsRatingKeepsFractionalPercentage()
+        {
+            var film = new Film { RatingRfCritics = 16.6667 };
+
+            Assert.Equal(16.6667f, film.GetCriticRating());
+        }
+
+        [Fact]
+        public void CriticRatingNeverExceedsOneHundred()
+        {
+            Assert.Equal(100f, new Film { RatingRfCritics = 100.0 }.GetCriticRating());
+            Assert.Equal(100f, new Film { RatingRfCritics = 670.0 }.GetCriticRating());
+        }
+
+        [Fact]
+        public void CriticRatingFallsBackToFilmCriticsTenPointScale()
         {
             var film = new Film { RatingFilmCritics = 6.5 };
 
-            Assert.Equal(65f, film.GetCriticRatingAsTenPointBased());
+            Assert.Equal(65f, film.GetCriticRating());
+        }
+
+        [Fact]
+        public void FilmCriticsRatingAboveTenIsTreatedAsPercentage()
+        {
+            var film = new Film { RatingFilmCritics = 72.0 };
+
+            Assert.Equal(72f, film.GetCriticRating());
+        }
+
+        [Fact]
+        public void CriticRatingIsMissingWithoutCriticRatings()
+        {
+            Assert.Null(new Film().GetCriticRating());
+            Assert.Null(((Film)null).GetCriticRating());
         }
 
         [Fact]

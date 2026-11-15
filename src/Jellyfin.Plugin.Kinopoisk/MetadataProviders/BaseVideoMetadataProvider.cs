@@ -17,7 +17,6 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
         where TItemType : BaseItem, IHasLookupInfo<TLookupInfoType>
         where TLookupInfoType : ItemLookupInfo, new()
     {
-        private const int MaxConcurrentImageChecks = 8;
         private readonly ILogger _logger;
         protected readonly IKinopoiskApiClient _apiClient;
         private readonly IProviderIdResolver<TLookupInfoType> _providerIdResolver;
@@ -144,7 +143,10 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             }
             catch (System.Exception e)
             {
-                _logger.LogWarning(
+                // The API client has already reported the exhausted quota once; do not repeat it per item.
+                var level = e is ApiException { StatusCode: 402 } ? LogLevel.Debug : LogLevel.Warning;
+                _logger.Log(
+                    level,
                     "Skipping {Step} for Kinopoisk id {KinopoiskId}: {Error}",
                     step,
                     kinopoiskId,
@@ -211,21 +213,13 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             if (candidates.Length == 0)
                 return Enumerable.Empty<PersonInfo>();
 
-            using var semaphore = new SemaphoreSlim(MaxConcurrentImageChecks);
-            var sanitizer = new RemoteImageUrlSanitizer(_httpClientFactory.CreateClient("KinopoiskImageSanitizer"));
+            // The number of simultaneous requests is limited inside the shared sanitizer.
+            var sanitizer = RemoteImageUrlSanitizer.CreateShared(_httpClientFactory.CreateClient("KinopoiskImageSanitizer"));
 
             var tasks = candidates.Select(async person =>
             {
-                await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-                try
-                {
-                    person.ImageUrl = await sanitizer.SanitizeRemoteImageUrl(person.ImageUrl, cancellationToken).ConfigureAwait(false);
-                    return person;
-                }
-                finally
-                {
-                    semaphore.Release();
-                }
+                person.ImageUrl = await sanitizer.SanitizeRemoteImageUrl(person.ImageUrl, cancellationToken).ConfigureAwait(false);
+                return person;
             });
 
             var sanitized = await Task.WhenAll(tasks).ConfigureAwait(false);

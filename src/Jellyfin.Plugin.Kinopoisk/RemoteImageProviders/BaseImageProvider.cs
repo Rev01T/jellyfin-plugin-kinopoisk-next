@@ -14,7 +14,6 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
 {
     public abstract class BaseImageProvider : IRemoteImageProvider
     {
-        private const int MaxConcurrentImageChecks = 8;
         private readonly IHttpClientFactory _httpClientFactory;
 
         protected BaseImageProvider(IHttpClientFactory httpClientFactory)
@@ -43,25 +42,17 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             if (candidates.Length == 0)
                 return Enumerable.Empty<RemoteImageInfo>();
 
-            using var semaphore = new SemaphoreSlim(MaxConcurrentImageChecks);
-            var sanitizer = new RemoteImageUrlSanitizer(_httpClientFactory.CreateClient("KinopoiskImageSanitizer"));
+            // The number of simultaneous requests is limited inside the shared sanitizer.
+            var sanitizer = RemoteImageUrlSanitizer.CreateShared(_httpClientFactory.CreateClient("KinopoiskImageSanitizer"));
 
             var tasks = candidates.Select(async image =>
             {
-                await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-                try
-                {
-                    var sanitizedUrl = await sanitizer.SanitizeRemoteImageUrl(image.Url, cancellationToken).ConfigureAwait(false);
-                    if (string.IsNullOrWhiteSpace(sanitizedUrl))
-                        return null;
+                var sanitizedUrl = await sanitizer.SanitizeRemoteImageUrl(image.Url, cancellationToken).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(sanitizedUrl))
+                    return null;
 
-                    image.Url = sanitizedUrl;
-                    return image;
-                }
-                finally
-                {
-                    semaphore.Release();
-                }
+                image.Url = sanitizedUrl;
+                return image;
             });
 
             var sanitized = await Task.WhenAll(tasks).ConfigureAwait(false);

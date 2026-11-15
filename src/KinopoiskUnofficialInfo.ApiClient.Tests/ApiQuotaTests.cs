@@ -1,3 +1,4 @@
+using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -24,7 +25,9 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
             var innerClient = new KinopoiskApiClient(
                 "test-token",
                 NullLogger<KinopoiskApiClient>.Instance,
-                httpClientFactory.Object);
+                httpClientFactory.Object,
+                // A fixed clock keeps the test independent of the daily quota reset time.
+                () => new DateTimeOffset(2026, 11, 15, 12, 0, 0, TimeSpan.Zero));
             var client = new CachedKinopoiskApiClient(
                 innerClient,
                 cache,

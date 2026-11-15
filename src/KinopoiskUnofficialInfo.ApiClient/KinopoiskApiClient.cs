@@ -15,17 +15,17 @@ namespace KinopoiskUnofficialInfo.ApiClient
         private readonly ILogger<KinopoiskApiClient> _logger;
         private readonly Client _apiClient;
         private readonly HttpClient _httpClient;
-        private static readonly TimeSpan QuotaCooldown = TimeSpan.FromHours(1);
         private readonly object _quotaLock = new object();
         private DateTimeOffset _quotaBlockedUntil = DateTimeOffset.MinValue;
-        private string _quotaExceededResponse = string.Empty;
+        private readonly Func<DateTimeOffset> _utcNow;
         private static readonly TimeSpan MinimumRequestInterval = TimeSpan.FromMilliseconds(110);
         private readonly SemaphoreSlim _requestStartLock = new SemaphoreSlim(1, 1);
         private DateTimeOffset _nextRequestAt = DateTimeOffset.MinValue;
 
-        public KinopoiskApiClient(string apiToken, ILogger<KinopoiskApiClient> logger, IHttpClientFactory httpClientFactory)
+        public KinopoiskApiClient(string apiToken, ILogger<KinopoiskApiClient> logger, IHttpClientFactory httpClientFactory, Func<DateTimeOffset> utcNow = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
             if (string.IsNullOrWhiteSpace(apiToken))
                 _logger.LogWarning("No Kinopoisk API token is configured. Set a personal token in the plugin settings.");
 
@@ -41,8 +41,15 @@ namespace KinopoiskUnofficialInfo.ApiClient
             ApiException quotaException = null;
             lock (_quotaLock)
             {
-                if (DateTimeOffset.UtcNow < _quotaBlockedUntil)
-                    quotaException = new ApiException("Kinopoisk API daily request limit exceeded.", 402, _quotaExceededResponse, new Dictionary<string, IEnumerable<string>>(), null);
+                // The response of the request that exhausted the quota is deliberately not replayed:
+                // its request counter (for example "500/500") is stale after the daily reset.
+                if (_utcNow() < _quotaBlockedUntil)
+                    quotaException = new ApiException(
+                        $"Kinopoisk API daily request limit exceeded. Requests are paused until {_quotaBlockedUntil:u}.",
+                        402,
+                        string.Empty,
+                        new Dictionary<string, IEnumerable<string>>(),
+                        null);
             }
             if (quotaException != null)
                 throw quotaException;
@@ -62,19 +69,23 @@ namespace KinopoiskUnofficialInfo.ApiClient
                 {
                     var shouldLog = false;
                     DateTimeOffset blockedUntil = DateTimeOffset.MinValue;
-                    var now = DateTimeOffset.UtcNow;
+                    var now = _utcNow();
                     lock (_quotaLock)
                     {
                         if (now >= _quotaBlockedUntil)
                         {
-                            _quotaBlockedUntil = now.Add(QuotaCooldown);
-                            _quotaExceededResponse = e.Response ?? string.Empty;
+                            _quotaBlockedUntil = KinopoiskQuota.BlockedUntil(now);
                             blockedUntil = _quotaBlockedUntil;
                             shouldLog = true;
                         }
                     }
                     if (shouldLog)
-                        _logger.LogWarning("Kinopoisk API quota exhausted. Requests are paused until {BlockedUntil:u}", blockedUntil);
+                    {
+                        _logger.LogWarning(
+                            "Kinopoisk API quota exhausted. Requests are paused until {BlockedUntil:u}. The daily limit is reset at 03:00 Moscow time.",
+                            blockedUntil);
+                        _logger.LogDebug("Kinopoisk API response for the exhausted quota: {Response}", e.Response);
+                    }
                 }
                 else if (e.StatusCode == 401)
                     _logger.LogWarning("Kinopoisk API rejected the configured API key (HTTP 401). Check the key in plugin settings.");

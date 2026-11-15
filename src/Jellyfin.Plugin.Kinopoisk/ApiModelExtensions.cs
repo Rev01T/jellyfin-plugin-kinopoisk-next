@@ -128,27 +128,37 @@ namespace Jellyfin.Plugin.Kinopoisk
                 dst.CommunityRating = (float)src.RatingImdb;
             if (dst.CommunityRating < 0.1)
                 dst.CommunityRating = null;
-            dst.CriticRating = src.GetCriticRatingAsTenPointBased();
+            dst.CriticRating = src.GetCriticRating();
 
             if (!string.IsNullOrWhiteSpace(src.ImdbId))
                 dst.SetProviderId(MetadataProvider.Imdb, src.ImdbId);
         }
 
-        public static float? GetCriticRatingAsTenPointBased(this Film src)
+        /// <summary>
+        /// Jellyfin's CriticRating is a 0-100 score (the web client shows it as a percentage).
+        /// </summary>
+        public static float? GetCriticRating(this Film src)
         {
             if (src is null)
                 return null;
 
-            // Jellyfin's CriticRating is a 0-100 score. Kinopoisk critic
-            // ratings are on a 0-10 scale, so convert them to percentages.
+            // ratingRfCritics is already a percentage of positive reviews: the API returns 67.0
+            // for the "67%" shown on the Kinopoisk page (recorded responses contain 75.0, 100.0).
+            if (src.RatingRfCritics > 0.0)
+                return (float)Math.Min(src.RatingRfCritics, 100.0);
+
+            // ratingFilmCritics is documented as a 0-10 score. A value above 10 can only be a
+            // percentage, so it is kept as is instead of being multiplied by ten again.
+            if (src.RatingFilmCritics > 0.0)
+            {
+                var rating = src.RatingFilmCritics <= 10.0
+                    ? src.RatingFilmCritics * 10.0
+                    : src.RatingFilmCritics;
+                return (float)Math.Min(rating, 100.0);
+            }
+
             // ratingGoodReview is intentionally not used: its semantics are
             // not established by the API/site comparison in the mapping audit.
-            if (src.RatingRfCritics > 0.0)
-                return (float)(src.RatingRfCritics * 10.0);
-
-            if (src.RatingFilmCritics > 0.0)
-                return (float)(src.RatingFilmCritics * 10.0);
-
             return null;
         }
 
