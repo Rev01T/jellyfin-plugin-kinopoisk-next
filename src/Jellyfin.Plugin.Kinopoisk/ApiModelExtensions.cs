@@ -439,37 +439,6 @@ namespace Jellyfin.Plugin.Kinopoisk
             return Convert.ToInt32(years.Substring(0, i));
         }
 
-        public static bool IsСontinuing(string years)
-            => years?.EndsWith("-...") ?? false;
-
-        public static int? GetLastYear(string years)
-        {
-            if (string.IsNullOrWhiteSpace(years))
-                return null;
-
-            years = years.Trim();
-
-            if (int.TryParse(years, out var res))
-                return res;
-
-            var i = 0;
-            int startindex() => years.Length - 1 - i;
-            while (true) {
-                if (i > 4)
-                    return null;
-                if (!char.IsDigit(years[startindex()]))
-                {
-                    i--;
-                    break;
-                }
-                i++;
-            }
-
-            return i > 0
-                ? (int?)Convert.ToInt32(years[startindex()..])
-                : null;
-        }
-
         public static Person ToPerson(this PersonResponse src)
         {
             if (src is null)

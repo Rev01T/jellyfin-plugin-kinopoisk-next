@@ -176,8 +176,6 @@ namespace Jellyfin.Plugin.Kinopoisk
 
             public SemaphoreSlim Limiter { get; }
 
-            public int CacheCount => _cache.Count;
-
             public bool TryGetCached(string url, out string sanitizedUrl)
             {
                 if (_cache.TryGetValue(url, out var entry))
