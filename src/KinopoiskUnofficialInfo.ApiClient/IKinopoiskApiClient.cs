@@ -4,16 +4,45 @@ using System.Threading.Tasks;
 
 namespace KinopoiskUnofficialInfo.ApiClient
 {
+    /// <summary>
+    /// Client of the poiskkino.dev API (https://api.poiskkino.dev, version 1.5).
+    /// </summary>
     public interface IKinopoiskApiClient
     {
-        Task<PersonResponse> GetPerson(int personId, CancellationToken? cancellationToken = null);
-        Task<Film> GetSingleFilm(int filmId, CancellationToken? cancellationToken = null);
-        Task<FilmSearchByFiltersResponse> GetFilmByImdbId(string imdbId, CancellationToken? cancellationToken = null);
-        Task<ApiKeyInfoResponse> GetApiKeyInfo(string apiKey, CancellationToken? cancellationToken = null);
-        Task<SeasonResponse> GetSeasons(int filmId, CancellationToken? cancellationToken = null);
-        Task<DistributionResponse> GetDistributions(int filmId, CancellationToken? cancellationToken = null);
-        Task<ICollection<StaffResponse>> GetStaff(int filmId, CancellationToken? cancellationToken = null);
-        Task<VideoResponse> GetTrailers(int filmId, CancellationToken? cancellationToken = null);
-        Task<FilmSearchResponse> SearchByKeyword(string keyword, int page = 1, CancellationToken? cancellationToken = null);
+        /// <summary>
+        /// Full card of a title: names, ratings, cast and crew, premiere dates, posters.
+        /// Returns <c>null</c> when the title does not exist or the ID is not valid.
+        /// </summary>
+        Task<MovieDto> GetMovie(int movieId, CancellationToken? cancellationToken = null);
+
+        /// <summary>
+        /// Trailers of a title. Costs one extra request: they are not part of the full card.
+        /// </summary>
+        Task<IReadOnlyList<VideoDto>> GetTrailers(int movieId, CancellationToken? cancellationToken = null);
+
+        /// <summary>
+        /// Titles with the given IMDb ID.
+        /// </summary>
+        Task<IReadOnlyList<MovieDto>> FindMoviesByImdbId(string imdbId, CancellationToken? cancellationToken = null);
+
+        /// <summary>
+        /// Search of titles by name.
+        /// </summary>
+        Task<SearchResponse<MovieDto>> SearchMovies(string query, int page = 1, CancellationToken? cancellationToken = null);
+
+        /// <summary>
+        /// Seasons of a series with their episodes, ordered by the season number.
+        /// </summary>
+        Task<IReadOnlyList<SeasonDto>> GetSeasons(int movieId, CancellationToken? cancellationToken = null);
+
+        /// <summary>
+        /// A person. Returns <c>null</c> when the person does not exist.
+        /// </summary>
+        Task<PersonDto> GetPerson(int personId, CancellationToken? cancellationToken = null);
+
+        /// <summary>
+        /// Usage of the token: limit, used and remaining requests, reset time.
+        /// </summary>
+        Task<TokenInfoDto> GetTokenInfo(CancellationToken? cancellationToken = null);
     }
 }

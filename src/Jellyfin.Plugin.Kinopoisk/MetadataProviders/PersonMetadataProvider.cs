@@ -35,6 +35,11 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
                 ResultLanguage = Constants.ProviderMetadataLanguage
             };
 
+            // The details of a person (birth date and place) cost one API request per person, which
+            // the daily quota of a free token cannot afford for a whole cast. Off by default.
+            if (Plugin.Instance?.Configuration?.LoadPersonDetails != true)
+                return result;
+
             var (resolveResult, kinopoiskId) = await _providerIdResolver.TryResolve(info, cancellationToken);
             if (!resolveResult)
                 return result;

@@ -15,7 +15,7 @@ using JellyfinSeason = MediaBrowser.Controller.Entities.TV.Season;
 namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
 {
     /// <summary>
-    /// Resolves season metadata from the Kinopoisk series seasons endpoint.
+    /// Resolves season metadata from the Kinopoisk seasons of a series.
     /// </summary>
     public sealed class SeasonMetadataProvider : BaseMetadataProvider, IRemoteMetadataProvider<JellyfinSeason, SeasonInfo>
     {
@@ -41,10 +41,10 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             if (info == null || !TryGetSeriesId(info.SeriesProviderIds, out var seriesId) || !info.IndexNumber.HasValue)
                 return result;
 
-            var response = await TryGetSeasons(_apiClient, _logger, seriesId, cancellationToken).ConfigureAwait(false);
+            var seasons = await TryGetSeasons(_apiClient, _logger, seriesId, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
 
-            var season = FindSeason(response, info.IndexNumber.Value);
+            var season = FindSeason(seasons, info.IndexNumber.Value);
             if (season == null)
                 return result;
 
@@ -63,7 +63,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
         /// and treated as "no data", so Jellyfin falls back to its other providers instead of
         /// reporting an error for every season and episode.
         /// </summary>
-        internal static async Task<SeasonResponse> TryGetSeasons(IKinopoiskApiClient apiClient, ILogger logger, int seriesId, CancellationToken cancellationToken)
+        internal static async Task<IReadOnlyList<SeasonDto>> TryGetSeasons(IKinopoiskApiClient apiClient, ILogger logger, int seriesId, CancellationToken cancellationToken)
         {
             try
             {
@@ -76,13 +76,13 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             catch (Exception e)
             {
                 // The API client has already reported the exhausted quota once; do not repeat it per item.
-                var level = e is ApiException { StatusCode: 402 } ? LogLevel.Debug : LogLevel.Warning;
+                var level = e is ApiException { IsQuotaExceeded: true } ? LogLevel.Debug : LogLevel.Warning;
                 logger.Log(level, "Skipping Kinopoisk seasons for series {SeriesId}: {Error}", seriesId, e.GetBaseException().Message);
                 return null;
             }
         }
 
-        internal static JellyfinSeason CreateSeasonItem(KinopoiskUnofficialInfo.ApiClient.Season season, int seriesId)
+        internal static JellyfinSeason CreateSeasonItem(SeasonDto season, int seriesId)
         {
             var item = new JellyfinSeason
             {
@@ -93,8 +93,8 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             return item;
         }
 
-        internal static KinopoiskUnofficialInfo.ApiClient.Season FindSeason(SeasonResponse response, int seasonNumber)
-            => response?.Items?.FirstOrDefault(item => item != null && item.Number == seasonNumber);
+        internal static SeasonDto FindSeason(IEnumerable<SeasonDto> seasons, int seasonNumber)
+            => seasons?.FirstOrDefault(item => item != null && item.Number == seasonNumber);
 
         internal static bool TryGetSeriesId(IDictionary<string, string> providerIds, out int seriesId)
         {

@@ -43,9 +43,9 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             if (!resolveResult)
                 return Enumerable.Empty<RemoteImageInfo>();
 
-            // Only the main posterUrl is offered. Gallery endpoints are not queried.
-            var film = await _apiClient.GetSingleFilm(kinopoiskId, cancellationToken);
-            var images = film.ToRemoteImageInfos().ToArray();
+            // Only the main poster is offered. It is part of the movie card, which is cached.
+            var movie = await _apiClient.GetMovie(kinopoiskId, cancellationToken);
+            var images = movie.ToRemoteImageInfos().ToArray();
 
             _logger.LogDebug(
                 "Retrieved {PrimaryCount} main poster candidates for Kinopoisk film {KinopoiskId}",

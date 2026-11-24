@@ -10,10 +10,11 @@
             <div class="content-primary">
                 <form id="KinopoiskConfigForm">
                     <div class="inputContainer">
-                        <label class="inputeLabel inputLabelUnfocused" for="ApiToken">API-KEY</label>
+                        <label class="inputeLabel inputLabelUnfocused" for="ApiToken">API-токен</label>
                         <input id="ApiToken" name="ApiToken" type="password" is="emby-input" autocomplete="new-password" />
-                        <div class="fieldDescription">Укажите личный API-ключ (обязателен для запросов). Получить его можно на
-                            <a href="https://kinopoiskapiunofficial.tech/profile" target="_blank" rel="noopener noreferrer">странице профиля Kinopoisk Unofficial API</a>.
+                        <div class="fieldDescription">Укажите личный API-токен (обязателен для запросов). Получить его можно в Telegram-боте
+                            <a href="https://t.me/poiskkinodev_bot" target="_blank" rel="noopener noreferrer">@poiskkinodev_bot</a>
+                            (сервис <a href="https://poiskkino.dev" target="_blank" rel="noopener noreferrer">poiskkino.dev</a>).
                         </div>
                     </div>
 
@@ -21,10 +22,26 @@
                         <label class="selectLabel" for="PremiereDateSource">Дата премьеры</label>
                         <select is="emby-select" id="PremiereDateSource" name="PremiereDateSource" class="emby-select-withcolor emby-select">
                             <option value="World">Мировая премьера</option>
-                            <option value="Russia">Российская премьера (кино, затем DVD и цифра)</option>
-                            <option value="YearOnly">Только год выпуска (без запросов)</option>
+                            <option value="Russia">Российская премьера (кинопрокат)</option>
+                            <option value="YearOnly">Только год выпуска</option>
                         </select>
-                        <div class="fieldDescription">Первые два варианта тратят один дополнительный запрос к API на каждый фильм или сериал. Если российской даты нет, берётся мировая.</div>
+                        <div class="fieldDescription">Даты входят в карточку фильма, поэтому дополнительные запросы к API не нужны. Если российской даты нет, берётся мировая; если нет никакой даты, берётся 1 января года выпуска.</div>
+                    </div>
+
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input is="emby-checkbox" type="checkbox" id="LoadTrailers" name="LoadTrailers" />
+                            <span>Загружать трейлеры</span>
+                        </label>
+                        <div class="fieldDescription checkboxFieldDescription">Один дополнительный запрос к API на каждый фильм или сериал.</div>
+                    </div>
+
+                    <div class="checkboxContainer checkboxContainer-withDescription">
+                        <label class="emby-checkbox-label">
+                            <input is="emby-checkbox" type="checkbox" id="LoadPersonDetails" name="LoadPersonDetails" />
+                            <span>Загружать подробные данные персон</span>
+                        </label>
+                        <div class="fieldDescription checkboxFieldDescription">Дата и место рождения актёров и съёмочной группы. Один запрос к API на каждого человека, поэтому при бесплатном токене (200 запросов в сутки) включать не рекомендуется. Фотографии персон загружаются и без этого.</div>
                     </div>
 
                     <div>
@@ -53,6 +70,8 @@
                 ApiClient.getPluginConfiguration(KinopoiskPluginConfig.pluginUniqueId).then(function (config) {
                     $('#ApiToken').val(config.ApiToken).change();
                     $('#PremiereDateSource').val(KinopoiskPluginConfig.premiereDateSourceName(config.PremiereDateSource));
+                    $('#LoadTrailers').prop('checked', config.LoadTrailers === true);
+                    $('#LoadPersonDetails').prop('checked', config.LoadPersonDetails === true);
                     Dashboard.hideLoadingMsg();
                 });
             });
@@ -62,6 +81,8 @@
                 ApiClient.getPluginConfiguration(KinopoiskPluginConfig.pluginUniqueId).then(function (config) {
                     config.ApiToken = $('#ApiToken').val();
                     config.PremiereDateSource = $('#PremiereDateSource').val();
+                    config.LoadTrailers = $('#LoadTrailers').prop('checked');
+                    config.LoadPersonDetails = $('#LoadPersonDetails').prop('checked');
                     ApiClient.updatePluginConfiguration(KinopoiskPluginConfig.pluginUniqueId, config).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);
                     });

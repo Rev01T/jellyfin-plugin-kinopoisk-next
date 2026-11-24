@@ -19,6 +19,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Real responses of the poiskkino.dev API, shared with the API client tests. -->
+    <Content Include="..\KinopoiskUnofficialInfo.ApiClient.Tests\fixtures\*.json" Link="fixtures\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Jellyfin.Plugin.Kinopoisk\Jellyfin.Plugin.Kinopoisk.csproj" />
   </ItemGroup>
 
