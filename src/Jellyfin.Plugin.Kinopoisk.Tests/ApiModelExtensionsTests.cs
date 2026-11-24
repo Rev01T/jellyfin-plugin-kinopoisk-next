@@ -1,9 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using KinopoiskUnofficialInfo.ApiClient;
 using Jellyfin.Data.Enums;
-using MediaBrowser.Controller.Entities.Movies;
-using MediaBrowser.Controller.Entities.TV;
+using KinopoiskUnofficialInfo.ApiClient;
 using MediaBrowser.Model.Entities;
 using Xunit;
 
@@ -12,14 +11,16 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
     public class ApiModelExtensionsTests
     {
         [Fact]
-        public void ToPersonInfosShouldSkipPersonsWithoutNames()
+        public void ToPersonInfosShouldSkipPersonsWithoutNamesAndDubbingActors()
         {
-            var staff = new List<StaffResponse>
+            var staff = new List<PersonInMovieDto>
             {
                 CreateStaff(1, "Иван Иванов", string.Empty),
                 CreateStaff(2, string.Empty, string.Empty),
                 CreateStaff(3, "   ", "   "),
-                CreateStaff(4, string.Empty, "John Smith")
+                CreateStaff(4, string.Empty, "John Smith"),
+                CreateStaff(5, "Дублёр", string.Empty, "voiceover"),
+                null
             };
 
             var result = staff.ToPersonInfos().ToArray();
@@ -31,204 +32,316 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
             Assert.Equal(2, result[1].SortOrder);
         }
 
-        [Theory]
-        [InlineData("1992-03-30", 1992, 3, 30)]
-        [InlineData("1992-03-30T00:00:00.0000000Z", 1992, 3, 30)]
-        public void ParseDateSupportsDateOnlyAndRoundTripValues(string value, int year, int month, int day)
+        [Fact]
+        public void ToPersonInfosHandlesMissingList()
         {
-            var result = value.ParseDate();
-
-            Assert.Equal(new System.DateTime(year, month, day), result);
+            Assert.Empty(((List<PersonInMovieDto>)null).ToPersonInfos());
         }
 
         [Fact]
-        public void ToPersonMapsBirthdayAndDeathDate()
+        public void ToPersonInfoMapsKindPhotoIdAndRole()
         {
-            var person = new PersonResponse
+            var person = new PersonInMovieDto
             {
-                NameRu = "Тест",
-                Birthday = "1980-02-03",
-                Death = "2020-04-05"
+                Id = 3873197,
+                Name = "Ирина Старшенбаум",
+                Photo = "https://example.test/photo/300x300",
+                Description = "Марина",
+                Profession = "актеры",
+                EnProfession = "actor"
+            };
+
+            var result = person.ToPersonInfo();
+
+            Assert.Equal("Ирина Старшенбаум", result.Name);
+            Assert.Equal("https://example.test/photo/300x300", result.ImageUrl);
+            Assert.Equal(PersonKind.Actor, result.Type);
+            Assert.Equal("Марина", result.Role);
+            Assert.Equal("3873197", result.ProviderIds[Constants.ProviderId]);
+        }
+
+        [Fact]
+        public void ToPersonInfoUsesTheProfessionWhenThereIsNoRole()
+        {
+            var person = new PersonInMovieDto { Id = 1, Name = "Артем Аксененко", Profession = "режиссеры", EnProfession = "director" };
+
+            var result = person.ToPersonInfo();
+
+            Assert.Equal("Режиссеры", result.Role);
+            Assert.Equal(PersonKind.Director, result.Type);
+        }
+
+        [Theory]
+        [InlineData("actor", PersonKind.Actor)]
+        [InlineData("director", PersonKind.Director)]
+        [InlineData("writer", PersonKind.Writer)]
+        [InlineData("composer", PersonKind.Composer)]
+        [InlineData("producer", PersonKind.Producer)]
+        [InlineData("editor", PersonKind.Editor)]
+        [InlineData("translator", PersonKind.Translator)]
+        [InlineData("operator", PersonKind.Unknown)]
+        [InlineData("design", PersonKind.Unknown)]
+        [InlineData("voiceover", PersonKind.Unknown)]
+        [InlineData("ACTOR", PersonKind.Actor)]
+        [InlineData(null, PersonKind.Unknown)]
+        public void ToPersonTypeMapsProfessionKeys(string profession, PersonKind expected)
+        {
+            Assert.Equal(expected, profession.ToPersonType());
+        }
+
+        [Fact]
+        public void ToPersonMapsBirthdayDeathDateAndBirthplace()
+        {
+            var person = new PersonDto
+            {
+                Name = "Тест",
+                Birthday = new DateTime(1980, 2, 3, 0, 0, 0, DateTimeKind.Utc),
+                Death = new DateTime(2020, 4, 5, 0, 0, 0, DateTimeKind.Utc),
+                BirthPlace = new List<ValueDto> { new ValueDto { Value = "Москва" }, new ValueDto { Value = " " }, new ValueDto { Value = "Россия" } }
             };
 
             var result = person.ToPerson();
 
-            Assert.Equal(new System.DateTime(1980, 2, 3), result.PremiereDate);
-            Assert.Equal(new System.DateTime(2020, 4, 5), result.EndDate);
+            Assert.Equal(new DateTime(1980, 2, 3), result.PremiereDate);
+            Assert.Equal(new DateTime(2020, 4, 5), result.EndDate);
+            Assert.Equal(new[] { "Москва, Россия" }, result.ProductionLocations);
+        }
+
+        [Fact]
+        public void ToPersonFallsBackToTheEnglishName()
+        {
+            Assert.Equal("John Smith", new PersonDto { Name = " ", EnName = "John Smith" }.ToPerson().Name);
+            var withoutPlace = new PersonDto { Name = "Тест" }.ToPerson();
+            Assert.True(withoutPlace.ProductionLocations == null || withoutPlace.ProductionLocations.Length == 0);
         }
 
         [Theory]
-        [InlineData("age6", "6+")]
-        [InlineData("age12", "12+")]
-        [InlineData("age16", "16+")]
-        [InlineData("age18", "18+")]
-        [InlineData("age0", "0+")]
-        public void NormalizeOfficialRatingMapsKinopoiskAgeLimits(string input, string expected)
+        [InlineData(0, "0+")]
+        [InlineData(6, "6+")]
+        [InlineData(12, "12+")]
+        [InlineData(16, "16+")]
+        [InlineData(18, "18+")]
+        public void NormalizeOfficialRatingMapsKinopoiskAgeLimits(int input, string expected)
         {
             Assert.Equal(expected, ApiModelExtensions.NormalizeOfficialRating(input, null));
+        }
+
+        [Fact]
+        public void NormalizeOfficialRatingPrefersTheAgeLimitOverMpaa()
+        {
+            Assert.Equal("12+", ApiModelExtensions.NormalizeOfficialRating(12, "pg13"));
         }
 
         [Theory]
         [InlineData("pg13", "PG-13")]
         [InlineData("r", "R")]
+        [InlineData("nc17", "NC-17")]
         public void NormalizeOfficialRatingNormalizesMpaaValues(string input, string expected)
         {
             Assert.Equal(expected, ApiModelExtensions.NormalizeOfficialRating(null, input));
         }
 
         [Fact]
-        public void RfCriticsRatingIsAlreadyAPercentageAndIsNotMultiplied()
+        public void NormalizeOfficialRatingIsMissingWithoutValidInput()
         {
-            // Kinopoisk shows 67%; the API returns 67.0 (not 6.7).
-            var film = new Film { RatingRfCritics = 67.0, RatingFilmCritics = 6.5 };
-
-            Assert.Equal(67f, film.GetCriticRating());
+            Assert.Null(ApiModelExtensions.NormalizeOfficialRating(null, null));
+            Assert.Null(ApiModelExtensions.NormalizeOfficialRating(14, " "));
         }
 
         [Fact]
-        public void RfCriticsRatingKeepsFractionalPercentage()
+        public void RussianCriticsRatingIsAlreadyAPercentageAndIsNotMultiplied()
         {
-            var film = new Film { RatingRfCritics = 16.6667 };
+            // Kinopoisk shows 60%; the API returns 60 (not 6).
+            var movie = new MovieDto { Rating = new RatingDto { RussianFilmCritics = 60, FilmCritics = 6.5 } };
 
-            Assert.Equal(16.6667f, film.GetCriticRating());
+            Assert.Equal(60f, movie.GetCriticRating());
+        }
+
+        [Fact]
+        public void RussianCriticsRatingKeepsFractionalPercentage()
+        {
+            var movie = new MovieDto { Rating = new RatingDto { RussianFilmCritics = 16.6667 } };
+
+            Assert.Equal(16.6667f, movie.GetCriticRating());
         }
 
         [Fact]
         public void CriticRatingNeverExceedsOneHundred()
         {
-            Assert.Equal(100f, new Film { RatingRfCritics = 100.0 }.GetCriticRating());
-            Assert.Equal(100f, new Film { RatingRfCritics = 670.0 }.GetCriticRating());
+            Assert.Equal(100f, new MovieDto { Rating = new RatingDto { RussianFilmCritics = 100.0 } }.GetCriticRating());
+            Assert.Equal(100f, new MovieDto { Rating = new RatingDto { RussianFilmCritics = 670.0 } }.GetCriticRating());
         }
 
         [Fact]
         public void CriticRatingFallsBackToFilmCriticsTenPointScale()
         {
-            var film = new Film { RatingFilmCritics = 6.5 };
-
-            Assert.Equal(65f, film.GetCriticRating());
+            Assert.Equal(65f, new MovieDto { Rating = new RatingDto { FilmCritics = 6.5 } }.GetCriticRating());
         }
 
         [Fact]
         public void FilmCriticsRatingAboveTenIsTreatedAsPercentage()
         {
-            var film = new Film { RatingFilmCritics = 72.0 };
-
-            Assert.Equal(72f, film.GetCriticRating());
+            Assert.Equal(72f, new MovieDto { Rating = new RatingDto { FilmCritics = 72.0 } }.GetCriticRating());
         }
 
         [Fact]
         public void CriticRatingIsMissingWithoutCriticRatings()
         {
-            Assert.Null(new Film().GetCriticRating());
-            Assert.Null(((Film)null).GetCriticRating());
+            Assert.Null(new MovieDto().GetCriticRating());
+            Assert.Null(new MovieDto { Rating = new RatingDto { Kp = 7.5 } }.GetCriticRating());
+            Assert.Null(((MovieDto)null).GetCriticRating());
         }
 
         [Fact]
         public void ToMovieMapsRuntimeOverviewFallbackAndGenreCasing()
         {
-            var film = new Film
+            var movie = new MovieDto
             {
-                FilmLength = 123,
+                MovieLength = 123,
                 Description = " ",
                 ShortDescription = "Краткое описание",
-                Genres = new List<Genre> { new Genre { Genre1 = "драма" } }
+                Genres = new List<NamedItemDto> { new NamedItemDto { Name = "драма" } }
             };
 
-            var result = film.ToMovie();
+            var result = movie.ToMovie();
 
-            Assert.Equal(System.TimeSpan.FromMinutes(123).Ticks, result.RunTimeTicks);
+            Assert.Equal(TimeSpan.FromMinutes(123).Ticks, result.RunTimeTicks);
             Assert.Equal("Краткое описание", result.Overview);
             Assert.Contains("Драма", result.Genres);
         }
 
         [Fact]
-        public void ToSeriesMapsCompletedStatusAndEndYear()
+        public void ToMovieUsesTheEpisodeLengthForSeries()
         {
-            var film = new Film { Completed = true, EndYear = 2023 };
-
-            var result = film.ToSeries();
-
-            Assert.Equal(SeriesStatus.Ended, result.Status);
-            Assert.Equal(new System.DateTime(2023, 12, 31), result.EndDate);
+            Assert.Equal(TimeSpan.FromMinutes(43).Ticks, new MovieDto { SeriesLength = 43 }.ToSeries().RunTimeTicks);
+            Assert.Null(new MovieDto().ToMovie().RunTimeTicks);
         }
 
         [Fact]
-        public void ToSeriesMapsUncompletedStatus()
+        public void CommunityRatingFallsBackToImdb()
         {
-            var film = new Film { Completed = false };
+            Assert.Equal(8.01f, new MovieDto { Rating = new RatingDto { Kp = 8.01, Imdb = 7.9 } }.ToMovie().CommunityRating);
+            Assert.Equal(7.9f, new MovieDto { Rating = new RatingDto { Kp = 0, Imdb = 7.9 } }.ToMovie().CommunityRating);
+            Assert.Null(new MovieDto { Rating = new RatingDto() }.ToMovie().CommunityRating);
+        }
 
-            var result = film.ToSeries();
+        [Fact]
+        public void ToSeriesMapsFinishedSeriesStatusAndEndYear()
+        {
+            var movie = new MovieDto { ReleaseYears = new List<ReleaseYearDto> { new ReleaseYearDto { Start = 2020, End = 2023 } } };
+
+            var result = movie.ToSeries();
+
+            Assert.Equal(SeriesStatus.Ended, result.Status);
+            Assert.Equal(new DateTime(2023, 12, 31), result.EndDate);
+        }
+
+        [Fact]
+        public void ToSeriesMapsRunningSeriesStatus()
+        {
+            // The end year 0 means that the series is still running.
+            var movie = new MovieDto { ReleaseYears = new List<ReleaseYearDto> { new ReleaseYearDto { Start = 2021, End = 0 } } };
+
+            var result = movie.ToSeries();
 
             Assert.Equal(SeriesStatus.Continuing, result.Status);
             Assert.Null(result.EndDate);
         }
 
         [Fact]
-        public void VoiceDirectorAndOperatorAreNotMappedAsFilmDirector()
+        public void ToSeriesMapsTheStatusFieldWhenThereAreNoReleaseYears()
         {
-            Assert.Equal(PersonKind.Unknown, StaffResponseProfessionKey.VOICE_DIRECTOR.ToPersonType());
-            Assert.Equal(PersonKind.Unknown, StaffResponseProfessionKey.OPERATOR.ToPersonType());
-            Assert.Equal(PersonKind.Director, StaffResponseProfessionKey.DIRECTOR.ToPersonType());
+            Assert.Equal(SeriesStatus.Ended, new MovieDto { Status = "completed" }.ToSeries().Status);
+            Assert.Equal(SeriesStatus.Continuing, new MovieDto().ToSeries().Status);
         }
 
         [Fact]
-        public void DistributionPremiereDatePrefersWorldPremiere()
+        public void LocalAndOriginalNames()
         {
-            var distributions = new DistributionResponse
-            {
-                Items = new List<Distribution>
-                {
-                    new Distribution { Type = DistributionType.PREMIERE, Date = "2020-02-01" },
-                    new Distribution { Type = DistributionType.WORLD_PREMIER, Date = "2020-03-01" },
-                    new Distribution { Type = DistributionType.WORLD_PREMIER, Date = "2020-03-02" }
-                }
-            };
+            var foreign = new MovieDto { Name = "Аватар", AlternativeName = "Avatar" };
+            var russian = new MovieDto { Name = "Пальма", AlternativeName = "Пальма", Countries = new List<NamedItemDto> { new NamedItemDto { Name = "Россия" } } };
+            var onlyOriginal = new MovieDto { AlternativeName = "Avatar" };
 
-            Assert.Equal(new System.DateTime(2020, 3, 1), distributions.GetPremiereDate());
+            Assert.Equal("Аватар", foreign.GetLocalName());
+            Assert.Equal("Avatar", foreign.GetOriginalNameIfNotSame());
+            Assert.Equal(string.Empty, russian.GetOriginalNameIfNotSame());
+            Assert.Equal("Avatar", onlyOriginal.GetLocalName());
+            Assert.Equal(string.Empty, onlyOriginal.GetOriginalNameIfNotSame());
+        }
+
+        [Theory]
+        [InlineData("https://www.youtube.com/embed/ZsJz2TJAPjw", "https://www.youtube.com/watch?v=ZsJz2TJAPjw")]
+        [InlineData("https://youtu.be/ZsJz2TJAPjw", "https://www.youtube.com/watch?v=ZsJz2TJAPjw")]
+        [InlineData("http://www.youtube.com/v/ZsJz2TJAPjw", "https://www.youtube.com/watch?v=ZsJz2TJAPjw")]
+        [InlineData("https://www.youtube.com/watch?v=ZsJz2TJAPjw", "https://www.youtube.com/watch?v=ZsJz2TJAPjw")]
+        public void SanitizeYoutubeLinkProducesWatchLinks(string input, string expected)
+        {
+            Assert.Equal(expected, input.SanitizeYoutubeLink());
         }
 
         [Fact]
-        public void DistributionPremiereDateFallsBackToPremiere()
+        public void ToMediaUrlsKeepsOnlyYoutubeVideos()
         {
-            var distributions = new DistributionResponse
+            var videos = new List<VideoDto>
             {
-                Items = new List<Distribution>
-                {
-                    new Distribution { Type = DistributionType.ALL, Date = "2020-01-01" },
-                    new Distribution { Type = DistributionType.PREMIERE, Date = "2020-02-01" }
-                }
+                new VideoDto { Site = "youtube", Name = "Трейлер", Url = "https://www.youtube.com/embed/abc" },
+                new VideoDto { Site = "YOUTUBE", Name = "Тизер", Url = "https://youtu.be/def" },
+                new VideoDto { Site = "other", Name = "Другое", Url = "https://example.test/video.mp4" },
+                new VideoDto { Site = "youtube", Name = "Без ссылки", Url = " " },
+                null
             };
 
-            Assert.Equal(new System.DateTime(2020, 2, 1), distributions.GetPremiereDate());
+            var result = videos.ToMediaUrls();
+
+            Assert.Equal(new[] { "https://www.youtube.com/watch?v=abc", "https://www.youtube.com/watch?v=def" }, result.Select(url => url.Url).ToArray());
+            Assert.Equal("Трейлер", result[0].Name);
+            Assert.Null(new List<VideoDto>().ToMediaUrls());
+            Assert.Null(((List<VideoDto>)null).ToMediaUrls());
         }
 
         [Fact]
-        public void DistributionPremiereDateReturnsNullWhenNoRelevantDateExists()
+        public void ToRemoteSearchResultMapsTheSearchHit()
         {
-            var distributions = new DistributionResponse
+            var movie = new MovieDto
             {
-                Items = new List<Distribution>
-                {
-                    new Distribution { Type = DistributionType.ALL, Date = "2020-01-01" }
-                }
+                Id = 301,
+                Name = "Матрица",
+                Year = 1999,
+                Description = "Описание",
+                Poster = new ImageDto { Url = "https://example.test/poster/600x900" }
             };
 
-            Assert.Null(distributions.GetPremiereDate());
+            var result = movie.ToRemoteSearchResult();
+
+            Assert.Equal("Матрица", result.Name);
+            Assert.Equal("https://example.test/poster/600x900", result.ImageUrl);
+            Assert.Equal(new DateTime(1999, 1, 1), result.PremiereDate);
+            Assert.Equal("Описание", result.Overview);
+            Assert.Equal("301", result.ProviderIds[Constants.ProviderId]);
+            Assert.Null(((MovieDto)null).ToRemoteSearchResult());
         }
 
-        private static StaffResponse CreateStaff(
-            int id,
-            string nameRu,
-            string nameEn)
+        [Fact]
+        public void ToRemoteImageInfosOffersThePoster()
         {
-            return new StaffResponse
+            var movie = new MovieDto { Poster = new ImageDto { Url = "https://example.test/poster/600x900" } };
+
+            var image = Assert.Single(movie.ToRemoteImageInfos());
+
+            Assert.Equal(ImageType.Primary, image.Type);
+            Assert.Equal("https://example.test/poster/600x900", image.Url);
+            Assert.Empty(new MovieDto().ToRemoteImageInfos());
+        }
+
+        private static PersonInMovieDto CreateStaff(int id, string name, string enName, string enProfession = "actor")
+        {
+            return new PersonInMovieDto
             {
-                StaffId = id,
-                NameRu = nameRu,
-                NameEn = nameEn,
-                PosterUrl = string.Empty,
-                ProfessionText = "Актёр",
-                ProfessionKey = StaffResponseProfessionKey.ACTOR
+                Id = id,
+                Name = name,
+                EnName = enName,
+                Profession = "актеры",
+                EnProfession = enProfession
             };
         }
     }

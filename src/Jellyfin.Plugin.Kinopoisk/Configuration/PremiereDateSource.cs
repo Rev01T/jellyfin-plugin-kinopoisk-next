@@ -2,22 +2,22 @@ namespace Jellyfin.Plugin.Kinopoisk.Configuration
 {
     /// <summary>
     /// Which date is stored as the premiere date of a film or series.
+    /// The dates are part of the title card, so no choice costs an extra API request.
     /// </summary>
     public enum PremiereDateSource
     {
         /// <summary>
-        /// World premiere from the Kinopoisk distributions (default). Costs one extra API request per item.
+        /// World premiere (default). If it is unknown, the earliest known date.
         /// </summary>
         World = 0,
 
         /// <summary>
-        /// Russian release (cinema first), falling back to the world premiere.
-        /// Costs one extra API request per item.
+        /// Release in Russian cinemas, falling back to the world premiere.
         /// </summary>
         Russia = 1,
 
         /// <summary>
-        /// Do not request distributions: the premiere date is January 1 of the production year.
+        /// The premiere date is January 1 of the production year.
         /// </summary>
         YearOnly = 2
     }

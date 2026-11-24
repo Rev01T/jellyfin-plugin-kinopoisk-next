@@ -14,7 +14,7 @@ using JellyfinEpisode = MediaBrowser.Controller.Entities.TV.Episode;
 namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
 {
     /// <summary>
-    /// Resolves episode metadata from the Kinopoisk series seasons endpoint.
+    /// Resolves episode metadata from the Kinopoisk seasons of a series.
     /// </summary>
     public sealed class EpisodeMetadataProvider : BaseMetadataProvider, IRemoteMetadataProvider<JellyfinEpisode, EpisodeInfo>
     {
@@ -43,42 +43,40 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
                 || !info.IndexNumber.HasValue)
                 return result;
 
-            var response = await SeasonMetadataProvider.TryGetSeasons(_apiClient, _logger, seriesId, cancellationToken).ConfigureAwait(false);
+            var seasons = await SeasonMetadataProvider.TryGetSeasons(_apiClient, _logger, seriesId, cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
 
-            var episode = FindEpisode(response, info.ParentIndexNumber.Value, info.IndexNumber.Value);
+            var episode = FindEpisode(seasons, info.ParentIndexNumber.Value, info.IndexNumber.Value);
 
             if (episode == null)
                 return result;
 
-            var item = CreateEpisodeItem(episode, seriesId);
+            var item = CreateEpisodeItem(episode, info.ParentIndexNumber.Value, seriesId);
 
             result.Item = item;
             result.HasMetadata = true;
             return result;
         }
 
-        internal static JellyfinEpisode CreateEpisodeItem(KinopoiskUnofficialInfo.ApiClient.Episode episode, int seriesId)
+        internal static JellyfinEpisode CreateEpisodeItem(EpisodeDto episode, int seasonNumber, int seriesId)
         {
             var item = new JellyfinEpisode
             {
-                ParentIndexNumber = episode.SeasonNumber,
-                IndexNumber = episode.EpisodeNumber,
-                Name = !string.IsNullOrWhiteSpace(episode.NameRu) ? episode.NameRu : episode.NameEn,
-                Overview = episode.Synopsis,
-                PremiereDate = episode.ReleaseDate.ParseDate()
+                ParentIndexNumber = seasonNumber,
+                IndexNumber = episode.Number,
+                Name = !string.IsNullOrWhiteSpace(episode.Name) ? episode.Name : episode.EnName,
+                Overview = episode.Description,
+                PremiereDate = episode.AirDate?.Date
             };
             item.ProviderIds[Constants.ProviderId] = seriesId.ToString(System.Globalization.CultureInfo.InvariantCulture);
             return item;
         }
 
-        internal static KinopoiskUnofficialInfo.ApiClient.Episode FindEpisode(SeasonResponse response, int seasonNumber, int episodeNumber)
-            => response?.Items?
+        internal static EpisodeDto FindEpisode(IEnumerable<SeasonDto> seasons, int seasonNumber, int episodeNumber)
+            => seasons?
                 .Where(season => season != null && season.Number == seasonNumber)
-                .SelectMany(season => season.Episodes ?? Enumerable.Empty<KinopoiskUnofficialInfo.ApiClient.Episode>())
-                .FirstOrDefault(item => item != null
-                    && item.SeasonNumber == seasonNumber
-                    && item.EpisodeNumber == episodeNumber);
+                .SelectMany(season => season.Episodes ?? new List<EpisodeDto>())
+                .FirstOrDefault(item => item != null && item.Number == episodeNumber);
 
         public Task<IEnumerable<RemoteSearchResult>> GetSearchResults(EpisodeInfo searchInfo, CancellationToken cancellationToken)
             => Task.FromResult(Enumerable.Empty<RemoteSearchResult>());

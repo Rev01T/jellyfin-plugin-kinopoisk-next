@@ -29,38 +29,13 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             _providerIdResolver = providerIdResolver ?? throw new System.ArgumentNullException(nameof(providerIdResolver));
         }
 
-        protected abstract TItemType ConvertResponseToItem(Film apiResponse);
+        protected abstract TItemType ConvertResponseToItem(MovieDto apiResponse);
 
         /// <summary>
-        /// Replaces the year-based premiere date with the exact date from the film distributions,
-        /// according to the "premiere date" plugin setting. Costs one API request.
+        /// Which date is stored as the premiere date, according to the plugin setting.
         /// </summary>
-        protected async Task ApplyDistributionPremiereDate(BaseItem item, int kinopoiskId, CancellationToken cancellationToken)
-        {
-            var source = Plugin.Instance?.Configuration?.PremiereDateSource ?? PremiereDateSource.World;
-            if (source == PremiereDateSource.YearOnly)
-                return;
-
-            var distributions = await _apiClient.GetDistributions(kinopoiskId, cancellationToken).ConfigureAwait(false);
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (distributions?.Items != null && _logger.IsEnabled(LogLevel.Debug))
-            {
-                _logger.LogDebug(
-                    "Kinopoisk id {KinopoiskId} distributions (type/subType/country/date): {Distributions}",
-                    kinopoiskId,
-                    string.Join("; ", distributions.Items
-                        .Where(d => d != null)
-                        .Select(d => $"{d.Type}/{d.SubType}/{d.Country?.Country1}/{d.Date}{(d.ReRelease ? "/re-release" : string.Empty)}")));
-            }
-
-            var premiereDate = distributions.GetPremiereDate(source);
-            if (premiereDate.HasValue)
-                item.PremiereDate = premiereDate.Value;
-        }
-
-        protected virtual Task EnrichItem(TItemType item, int kinopoiskId, CancellationToken cancellationToken)
-            => Task.CompletedTask;
+        protected static PremiereDateSource PremiereDateSource
+            => Plugin.Instance?.Configuration?.PremiereDateSource ?? PremiereDateSource.World;
 
         public async Task<MetadataResult<TItemType>> GetMetadata(TLookupInfoType info, CancellationToken cancellationToken)
         {
@@ -75,52 +50,40 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             if (!resolveResult)
                 return result;
 
-            var film = await _apiClient.GetSingleFilm(kinopoiskId, cancellationToken);
+            // One request: the card contains the cast and crew, the premiere dates and the poster too.
+            var movie = await _apiClient.GetMovie(kinopoiskId, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
-            if (film is null)
+            if (movie is null)
                 return result;
 
-            result.Item = ConvertResponseToItem(film);
+            result.Item = ConvertResponseToItem(movie);
             if (result.Item != null)
-            {
-                // The main film data is already in hand. Failures of the additional
-                // requests below must not discard it (title, overview, ratings...).
-                await TryOptional(
-                    async () =>
-                    {
-                        await EnrichItem(result.Item, kinopoiskId, cancellationToken).ConfigureAwait(false);
-                        return true;
-                    },
-                    "additional item data",
-                    kinopoiskId,
-                    cancellationToken).ConfigureAwait(false);
                 result.HasMetadata = true;
-            }
 
-            var staff = await TryOptional(
-                () => _apiClient.GetStaff(kinopoiskId, cancellationToken),
-                "staff",
-                kinopoiskId,
-                cancellationToken).ConfigureAwait(false);
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var personInfos = staff?.ToPersonInfos() ?? Enumerable.Empty<PersonInfo>();
+            // The main data is already in hand. Failures of the steps below must not discard it
+            // (title, overview, ratings...).
+            var personInfos = movie.Persons.ToPersonInfos();
             var sanitizedPersons = await TryOptional(
                 () => SanitizeEmptyImagePersonInfos(personInfos, cancellationToken),
                 "person images",
                 kinopoiskId,
                 cancellationToken).ConfigureAwait(false);
+            PersonPhotoCache.Remember(sanitizedPersons);
             foreach (var item in sanitizedPersons ?? Enumerable.Empty<PersonInfo>())
                 result.AddPerson(item);
 
-            var trailers = await TryOptional(
-                () => _apiClient.GetTrailers(kinopoiskId, cancellationToken),
-                "trailers",
-                kinopoiskId,
-                cancellationToken).ConfigureAwait(false);
-            var remoteTrailers = trailers.ToMediaUrls();
-            if (remoteTrailers is not null && result.Item is not null)
-                result.Item.RemoteTrailers = remoteTrailers;
+            // Trailers are not in the card: one more request, so it is optional.
+            if (Plugin.Instance?.Configuration?.LoadTrailers == true && result.Item is not null)
+            {
+                var trailers = await TryOptional(
+                    () => _apiClient.GetTrailers(kinopoiskId, cancellationToken),
+                    "trailers",
+                    kinopoiskId,
+                    cancellationToken).ConfigureAwait(false);
+                var remoteTrailers = trailers.ToMediaUrls();
+                if (remoteTrailers is not null)
+                    result.Item.RemoteTrailers = remoteTrailers;
+            }
 
             return result;
         }
@@ -144,7 +107,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             catch (System.Exception e)
             {
                 // The API client has already reported the exhausted quota once; do not repeat it per item.
-                var level = e is ApiException { StatusCode: 402 } ? LogLevel.Debug : LogLevel.Warning;
+                var level = e is ApiException { IsQuotaExceeded: true } ? LogLevel.Debug : LogLevel.Warning;
                 _logger.Log(
                     level,
                     "Skipping {Step} for Kinopoisk id {KinopoiskId}: {Error}",
@@ -160,7 +123,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             if (searchInfo.TryGetProviderId(Constants.ProviderId, out var kinopoiskIdStr)
                 && int.TryParse(kinopoiskIdStr, out var kinopoiskId))
             {
-                var providerIdResult = (await _apiClient.GetSingleFilm(kinopoiskId, cancellationToken))
+                var providerIdResult = (await _apiClient.GetMovie(kinopoiskId, cancellationToken))
                     .ToRemoteSearchResult();
                 return providerIdResult is null
                     ? Enumerable.Empty<RemoteSearchResult>()
@@ -171,7 +134,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             // optional filename-style forms kp687670 and kp-687670.
             if (TryParseKinopoiskId(searchInfo.Name, out kinopoiskId))
             {
-                var idResult = (await _apiClient.GetSingleFilm(kinopoiskId, cancellationToken))
+                var idResult = (await _apiClient.GetMovie(kinopoiskId, cancellationToken))
                     .ToRemoteSearchResult();
                 return idResult is null
                     ? Enumerable.Empty<RemoteSearchResult>()
@@ -181,7 +144,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             if (string.IsNullOrWhiteSpace(searchInfo.Name))
                 return Enumerable.Empty<RemoteSearchResult>();
 
-            var searchResult = await _apiClient.SearchByKeyword(
+            var searchResult = await _apiClient.SearchMovies(
                 searchInfo.Name,
                 cancellationToken: cancellationToken);
             return searchResult.ToRemoteSearchResults(_logger);

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,39 +26,28 @@ namespace KinopoiskUnofficialInfo.ApiClient
         {
         }
 
-        public Task<PersonResponse> GetPerson(int personId, CancellationToken? cancellationToken = null)
+        public Task<MovieDto> GetMovie(int movieId, CancellationToken? cancellationToken = null)
+            => TryGetValue(GenerateKey(nameof(GetMovie), movieId), c => c.GetMovie(movieId, cancellationToken));
+
+        public Task<IReadOnlyList<VideoDto>> GetTrailers(int movieId, CancellationToken? cancellationToken = null)
+            => TryGetValue(GenerateKey(nameof(GetTrailers), movieId), c => c.GetTrailers(movieId, cancellationToken));
+
+        public Task<IReadOnlyList<MovieDto>> FindMoviesByImdbId(string imdbId, CancellationToken? cancellationToken = null)
+            => TryGetValue(GenerateKey(nameof(FindMoviesByImdbId), imdbId), c => c.FindMoviesByImdbId(imdbId, cancellationToken));
+
+        public Task<SearchResponse<MovieDto>> SearchMovies(string query, int page = 1, CancellationToken? cancellationToken = null)
+            => TryGetValue(GenerateKey(nameof(SearchMovies), query, page), c => c.SearchMovies(query, page, cancellationToken));
+
+        // The seasons are requested by the season provider and by the provider of every episode.
+        public Task<IReadOnlyList<SeasonDto>> GetSeasons(int movieId, CancellationToken? cancellationToken = null)
+            => TryGetValue(GenerateKey(nameof(GetSeasons), movieId), c => c.GetSeasons(movieId, cancellationToken), TimeSpan.FromMinutes(30));
+
+        public Task<PersonDto> GetPerson(int personId, CancellationToken? cancellationToken = null)
             => TryGetValue(GenerateKey(nameof(GetPerson), personId), c => c.GetPerson(personId, cancellationToken));
 
-        public Task<Film> GetSingleFilm(int filmId, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(GetSingleFilm), filmId), c => c.GetSingleFilm(filmId, cancellationToken));
-
-        public Task<FilmSearchByFiltersResponse> GetFilmByImdbId(string imdbId, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(GetFilmByImdbId), imdbId), c => c.GetFilmByImdbId(imdbId, cancellationToken));
-
-        public Task<ApiKeyInfoResponse> GetApiKeyInfo(string apiKey, CancellationToken? cancellationToken = null)
-        {
-            if (string.IsNullOrWhiteSpace(apiKey))
-                throw new ArgumentException("API key is required.", nameof(apiKey));
-
-            // Never put the API key itself into an IMemoryCache key or diagnostic log.
-            var keyHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(apiKey.Trim())));
-            return TryGetValue(GenerateKey(nameof(GetApiKeyInfo), keyHash), c => c.GetApiKeyInfo(apiKey, cancellationToken), TimeSpan.FromMinutes(15));
-        }
-
-        public Task<SeasonResponse> GetSeasons(int filmId, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(GetSeasons), filmId), c => c.GetSeasons(filmId, cancellationToken));
-
-        public Task<DistributionResponse> GetDistributions(int filmId, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(GetDistributions), filmId), c => c.GetDistributions(filmId, cancellationToken));
-
-        public Task<ICollection<StaffResponse>> GetStaff(int filmId, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(GetStaff), filmId), c => c.GetStaff(filmId, cancellationToken));
-
-        public Task<VideoResponse> GetTrailers(int filmId, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(GetTrailers), filmId), c => c.GetTrailers(filmId, cancellationToken));
-
-        public Task<FilmSearchResponse> SearchByKeyword(string keyword, int page = 1, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(SearchByKeyword), keyword, page), c => c.SearchByKeyword(keyword, page, cancellationToken));
+        // Short-lived: it is used to show or check the number of requests left.
+        public Task<TokenInfoDto> GetTokenInfo(CancellationToken? cancellationToken = null)
+            => TryGetValue(GenerateKey(nameof(GetTokenInfo)), c => c.GetTokenInfo(cancellationToken), TimeSpan.FromMinutes(1));
 
         private static string GenerateKey(params object[] objects)
         {

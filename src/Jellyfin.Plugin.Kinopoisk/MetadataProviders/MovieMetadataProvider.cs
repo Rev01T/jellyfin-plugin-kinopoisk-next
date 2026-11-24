@@ -1,6 +1,4 @@
 using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
 using Jellyfin.Plugin.Kinopoisk.ProviderIdResolvers;
 using KinopoiskUnofficialInfo.ApiClient;
 using MediaBrowser.Controller.Entities.Movies;
@@ -16,10 +14,7 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
         {
         }
 
-        protected override Movie ConvertResponseToItem(Film apiResponse)
-            => apiResponse.ToMovie();
-
-        protected override Task EnrichItem(Movie item, int kinopoiskId, CancellationToken cancellationToken)
-            => ApplyDistributionPremiereDate(item, kinopoiskId, cancellationToken);
+        protected override Movie ConvertResponseToItem(MovieDto apiResponse)
+            => apiResponse.ToMovie(PremiereDateSource);
     }
 }

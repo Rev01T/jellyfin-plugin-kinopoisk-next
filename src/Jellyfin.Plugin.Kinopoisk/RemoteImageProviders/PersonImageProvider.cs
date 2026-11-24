@@ -37,9 +37,24 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             if (!resolveResult)
                 return Enumerable.Empty<RemoteImageInfo>();
 
-            var person = await _apiClient.GetPerson(kinopoiskId, cancellationToken);
+            // The photo is already known from the cast list of a title the person was seen in:
+            // no API request is needed for it.
+            RemoteImageInfo image = null;
+            if (PersonPhotoCache.TryGetOriginal(kinopoiskId, out var photoUrl))
+            {
+                image = new RemoteImageInfo
+                {
+                    Type = ImageType.Primary,
+                    Url = photoUrl,
+                    ProviderName = Constants.ProviderName
+                };
+            }
+            else if (Plugin.Instance?.Configuration?.LoadPersonDetails == true)
+            {
+                var person = await _apiClient.GetPerson(kinopoiskId, cancellationToken);
+                image = person.ToRemoteImageInfo();
+            }
 
-            var image = person.ToRemoteImageInfo();
             if (image is null)
                 return Enumerable.Empty<RemoteImageInfo>();
 
