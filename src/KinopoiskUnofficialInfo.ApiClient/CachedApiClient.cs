@@ -29,9 +29,6 @@ namespace KinopoiskUnofficialInfo.ApiClient
         public Task<MovieDto> GetMovie(int movieId, CancellationToken? cancellationToken = null)
             => TryGetValue(GenerateKey(nameof(GetMovie), movieId), c => c.GetMovie(movieId, cancellationToken));
 
-        public Task<IReadOnlyList<VideoDto>> GetTrailers(int movieId, CancellationToken? cancellationToken = null)
-            => TryGetValue(GenerateKey(nameof(GetTrailers), movieId), c => c.GetTrailers(movieId, cancellationToken));
-
         public Task<IReadOnlyList<MovieDto>> FindMoviesByImdbId(string imdbId, CancellationToken? cancellationToken = null)
             => TryGetValue(GenerateKey(nameof(FindMoviesByImdbId), imdbId), c => c.FindMoviesByImdbId(imdbId, cancellationToken));
 

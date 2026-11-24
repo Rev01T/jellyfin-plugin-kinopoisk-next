@@ -205,42 +205,6 @@ namespace Jellyfin.Plugin.Kinopoisk
             };
         }
 
-        public static IReadOnlyList<MediaUrl> ToMediaUrls(this IEnumerable<VideoDto> src)
-        {
-            if (src is null)
-                return null;
-
-            var urls = src.Select(t => t.ToMediaUrl())
-                .Where(mu => mu != null)
-                .ToList();
-            return urls.Count > 0 ? urls : null;
-        }
-
-        public static MediaUrl ToMediaUrl(this VideoDto src)
-        {
-            if (src is null
-                || !string.Equals(src.Site, "youtube", StringComparison.OrdinalIgnoreCase)
-                || string.IsNullOrWhiteSpace(src.Url))
-                return null;
-
-            return new MediaUrl
-            {
-                Name = src.Name,
-                Url = src.Url.SanitizeYoutubeLink()
-            };
-        }
-
-        public static string SanitizeYoutubeLink(this string src)
-        {
-            // Jellyfin web currently recognizes only https://www.youtube.com/watch?v=xxx links
-            return src
-                .Replace("http://", "https://")
-                .Replace("https://youtu.be/", "https://www.youtube.com/watch?v=")
-                .Replace("https://www.youtube.com/v/", "https://www.youtube.com/watch?v=")
-                .Replace("https://www.youtube.com/embed/", "https://www.youtube.com/watch?v=")
-                .Replace("https://youtube.com/embed/", "https://www.youtube.com/watch?v=");
-        }
-
         public static RemoteImageInfo ToRemoteImageInfo(this PersonDto src)
         {
             if (src is null || string.IsNullOrEmpty(src.Photo))

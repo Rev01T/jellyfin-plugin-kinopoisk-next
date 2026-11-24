@@ -269,36 +269,6 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
             Assert.Equal(string.Empty, onlyOriginal.GetOriginalNameIfNotSame());
         }
 
-        [Theory]
-        [InlineData("https://www.youtube.com/embed/ZsJz2TJAPjw", "https://www.youtube.com/watch?v=ZsJz2TJAPjw")]
-        [InlineData("https://youtu.be/ZsJz2TJAPjw", "https://www.youtube.com/watch?v=ZsJz2TJAPjw")]
-        [InlineData("http://www.youtube.com/v/ZsJz2TJAPjw", "https://www.youtube.com/watch?v=ZsJz2TJAPjw")]
-        [InlineData("https://www.youtube.com/watch?v=ZsJz2TJAPjw", "https://www.youtube.com/watch?v=ZsJz2TJAPjw")]
-        public void SanitizeYoutubeLinkProducesWatchLinks(string input, string expected)
-        {
-            Assert.Equal(expected, input.SanitizeYoutubeLink());
-        }
-
-        [Fact]
-        public void ToMediaUrlsKeepsOnlyYoutubeVideos()
-        {
-            var videos = new List<VideoDto>
-            {
-                new VideoDto { Site = "youtube", Name = "Трейлер", Url = "https://www.youtube.com/embed/abc" },
-                new VideoDto { Site = "YOUTUBE", Name = "Тизер", Url = "https://youtu.be/def" },
-                new VideoDto { Site = "other", Name = "Другое", Url = "https://example.test/video.mp4" },
-                new VideoDto { Site = "youtube", Name = "Без ссылки", Url = " " },
-                null
-            };
-
-            var result = videos.ToMediaUrls();
-
-            Assert.Equal(new[] { "https://www.youtube.com/watch?v=abc", "https://www.youtube.com/watch?v=def" }, result.Select(url => url.Url).ToArray());
-            Assert.Equal("Трейлер", result[0].Name);
-            Assert.Null(new List<VideoDto>().ToMediaUrls());
-            Assert.Null(((List<VideoDto>)null).ToMediaUrls());
-        }
-
         [Fact]
         public void ToRemoteSearchResultMapsTheSearchHit()
         {

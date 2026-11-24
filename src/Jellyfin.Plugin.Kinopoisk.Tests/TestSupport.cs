@@ -23,27 +23,19 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
     internal sealed class FakeApiClient : IKinopoiskApiClient
     {
         public Func<int, MovieDto> Movie { get; set; } = _ => null;
-        public Func<int, IReadOnlyList<VideoDto>> Trailers { get; set; } = _ => new List<VideoDto>();
         public Func<int, IReadOnlyList<SeasonDto>> Seasons { get; set; } = _ => new List<SeasonDto>();
         public Func<int, PersonDto> Person { get; set; } = _ => null;
         public Exception Failure { get; set; }
 
         public int MovieRequests { get; private set; }
-        public int TrailerRequests { get; private set; }
         public int SeasonRequests { get; private set; }
         public int PersonRequests { get; private set; }
-        public int TotalRequests => MovieRequests + TrailerRequests + SeasonRequests + PersonRequests;
+        public int TotalRequests => MovieRequests + SeasonRequests + PersonRequests;
 
         public Task<MovieDto> GetMovie(int movieId, CancellationToken? cancellationToken = null)
         {
             MovieRequests++;
             return Respond(() => Movie(movieId));
-        }
-
-        public Task<IReadOnlyList<VideoDto>> GetTrailers(int movieId, CancellationToken? cancellationToken = null)
-        {
-            TrailerRequests++;
-            return Respond(() => Trailers(movieId));
         }
 
         public Task<IReadOnlyList<SeasonDto>> GetSeasons(int movieId, CancellationToken? cancellationToken = null)

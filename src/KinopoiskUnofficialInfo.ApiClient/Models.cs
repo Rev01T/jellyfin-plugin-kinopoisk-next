@@ -98,27 +98,6 @@ namespace KinopoiskUnofficialInfo.ApiClient
         public DateTime? Rerelease { get; set; }
     }
 
-    public sealed class VideoDto
-    {
-        [JsonProperty("url")]
-        public string Url { get; set; }
-
-        [JsonProperty("name")]
-        public string Name { get; set; }
-
-        [JsonProperty("site")]
-        public string Site { get; set; }
-
-        [JsonProperty("type")]
-        public string Type { get; set; }
-    }
-
-    public sealed class VideosDto
-    {
-        [JsonProperty("trailers")]
-        public List<VideoDto> Trailers { get; set; }
-    }
-
     public sealed class SeasonInfoDto
     {
         [JsonProperty("number")]
@@ -245,9 +224,6 @@ namespace KinopoiskUnofficialInfo.ApiClient
 
         [JsonProperty("seasonsInfo")]
         public List<SeasonInfoDto> SeasonsInfo { get; set; }
-
-        [JsonProperty("videos")]
-        public VideosDto Videos { get; set; }
     }
 
     public sealed class EpisodeDto
