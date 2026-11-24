@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
@@ -15,7 +16,8 @@ namespace KinopoiskUnofficialInfo.ApiClient
         public const string DefaultBaseUrl = "https://api.poiskkino.dev";
 
         private const int MaxSeasonPages = 10;
-        private static readonly TimeSpan MinimumRequestInterval = TimeSpan.FromMilliseconds(110);
+        // The API allows 5 requests per second (the x-ratelimit-limit header): 4 per second leaves a margin.
+        private static readonly TimeSpan DefaultRequestInterval = TimeSpan.FromMilliseconds(250);
         private static readonly TimeSpan DefaultRetryDelay = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(5);
         private static readonly Regex IdSegment = new Regex(@"/\d+", RegexOptions.Compiled);
@@ -24,6 +26,7 @@ namespace KinopoiskUnofficialInfo.ApiClient
         private readonly HttpClient _httpClient;
         private readonly string _baseUrl;
         private readonly ApiJson _json;
+        private readonly TimeSpan _requestInterval;
         private readonly Func<DateTimeOffset> _utcNow;
         private readonly object _quotaLock = new object();
         private DateTimeOffset _quotaBlockedUntil = DateTimeOffset.MinValue;
@@ -35,8 +38,10 @@ namespace KinopoiskUnofficialInfo.ApiClient
             ILogger<KinopoiskApiClient> logger,
             IHttpClientFactory httpClientFactory,
             Func<DateTimeOffset> utcNow = null,
-            string baseUrl = DefaultBaseUrl)
+            string baseUrl = DefaultBaseUrl,
+            TimeSpan? requestInterval = null)
         {
+            _requestInterval = requestInterval ?? DefaultRequestInterval;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
             if (string.IsNullOrWhiteSpace(apiToken))
@@ -62,23 +67,6 @@ namespace KinopoiskUnofficialInfo.ApiClient
                     // 400: the ID is outside of the range the API accepts (250..99999999).
                     _logger.LogDebug("Kinopoisk title {MovieId} was not found (HTTP {StatusCode})", movieId, e.StatusCode);
                     return null;
-                }
-            }, cancellationToken);
-
-        public Task<IReadOnlyList<VideoDto>> GetTrailers(int movieId, CancellationToken? cancellationToken = null)
-            => Invoke<IReadOnlyList<VideoDto>>(async ct =>
-            {
-                try
-                {
-                    var response = await GetJson<CursorResponse<MovieDto>>(
-                        $"/v1.5/movie?id={movieId}&selectFields=id&selectFields=videos&limit=1", ct).ConfigureAwait(false);
-                    var trailers = response.Docs?.FirstOrDefault()?.Videos?.Trailers;
-                    return trailers?.Where(video => video != null).ToList() ?? new List<VideoDto>();
-                }
-                catch (ApiException e) when (e.StatusCode == 400 || e.StatusCode == 404)
-                {
-                    _logger.LogWarning("Trailers of the Kinopoisk title {MovieId} were not loaded (HTTP {StatusCode}): {Response}", movieId, e.StatusCode, e.Response);
-                    return new List<VideoDto>();
                 }
             }, cancellationToken);
 
@@ -262,6 +250,13 @@ namespace KinopoiskUnofficialInfo.ApiClient
             if (retryHeader != null)
                 retryAfter = retryHeader.Delta ?? (retryHeader.Date.HasValue ? retryHeader.Date.Value - _utcNow() : (TimeSpan?)null);
 
+            // Without Retry-After the API tells when the rate limit window ends in x-ratelimit-reset (seconds).
+            if (retryAfter == null
+                && response.Headers.TryGetValues("x-ratelimit-reset", out var resetValues)
+                && int.TryParse(resetValues.FirstOrDefault(), NumberStyles.None, CultureInfo.InvariantCulture, out var resetSeconds)
+                && resetSeconds > 0 && resetSeconds <= 60)
+                retryAfter = TimeSpan.FromSeconds(resetSeconds);
+
             return new RawResponse((int)response.StatusCode, body, retryAfter);
         }
 
@@ -340,7 +335,7 @@ namespace KinopoiskUnofficialInfo.ApiClient
                 var delay = _nextRequestAt - DateTimeOffset.UtcNow;
                 if (delay > TimeSpan.Zero)
                     await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
-                _nextRequestAt = DateTimeOffset.UtcNow.Add(MinimumRequestInterval);
+                _nextRequestAt = DateTimeOffset.UtcNow.Add(_requestInterval);
             }
             finally
             {

@@ -22,6 +22,7 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
         public HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
         public string Body { get; set; } = "{}";
         public TimeSpan? RetryAfter { get; set; }
+        public Dictionary<string, string> Headers { get; } = new Dictionary<string, string>();
 
         public static FakeResponse Ok(string body) => new FakeResponse { Body = body };
         public static FakeResponse Fixture(string name) => Ok(Fixtures.Read(name));
@@ -34,6 +35,7 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
         private readonly Func<string, FakeResponse> _route;
         private readonly List<string> _requests = new List<string>();
         private readonly List<string> _rawRequests = new List<string>();
+        private readonly List<DateTime> _times = new List<DateTime>();
 
         public RoutingHandler(Func<string, FakeResponse> route)
         {
@@ -44,6 +46,12 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
         public IReadOnlyList<string> Requests
         {
             get { lock (_requests) return _requests.ToArray(); }
+        }
+
+        /// <summary>When every request was received.</summary>
+        public IReadOnlyList<DateTime> Times
+        {
+            get { lock (_requests) return _times.ToArray(); }
         }
 
         /// <summary>Path and query of every request exactly as sent, with the escaping.</summary>
@@ -69,6 +77,7 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
             {
                 _requests.Add(target);
                 _rawRequests.Add(request.RequestUri.PathAndQuery);
+                _times.Add(DateTime.UtcNow);
             }
 
             var response = _route(target);
@@ -78,6 +87,8 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
             };
             if (response.RetryAfter.HasValue)
                 message.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(response.RetryAfter.Value);
+            foreach (var header in response.Headers)
+                message.Headers.TryAddWithoutValidation(header.Key, header.Value);
             return Task.FromResult(message);
         }
     }

@@ -20,7 +20,7 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
         {
             var handler = new RoutingHandler(route ?? RecordedApi);
             var logger = new ListLogger<KinopoiskApiClient>();
-            var client = new KinopoiskApiClient("test-token", logger, new SingleHandlerClientFactory(handler));
+            var client = new KinopoiskApiClient("test-token", logger, new SingleHandlerClientFactory(handler), requestInterval: TimeSpan.Zero);
             return (client, handler, logger);
         }
 
@@ -170,7 +170,8 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
         [Fact]
         public async Task GetMovie_NotFound_ReturnsNull()
         {
-            var (client, _, _) = Create(_ => FakeResponse.Error(404, "{\"message\":\"Not Found\"}"));
+            // The recorded answer of the API for an ID in the valid range that does not exist.
+            var (client, _, _) = Create(_ => FakeResponse.Error(404, Fixtures.Read("movie_not_found.json")));
 
             Assert.Null(await client.GetMovie(99999990));
         }
@@ -343,27 +344,50 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
         }
 
         [Fact]
-        public async Task GetTrailers_AsksForTheVideosOnly()
+        public async Task RequestsAreSpacedToStayWithinTheRateLimitOfFivePerSecond()
         {
-            var body = "{\"docs\":[{\"id\":301,\"videos\":{\"trailers\":[" +
-                "{\"url\":\"https://www.youtube.com/embed/abc\",\"name\":\"Official Trailer\",\"site\":\"youtube\",\"type\":\"TRAILER\"}," +
-                "{\"url\":\"https://example.test/video.mp4\",\"name\":\"Other\",\"site\":\"other\",\"type\":\"TEASER\"}]}}],\"hasNext\":false}";
-            var (client, handler, _) = Create(_ => FakeResponse.Ok(body));
+            // The API sends x-ratelimit-limit: 5.
+            var handler = new RoutingHandler(_ => FakeResponse.Fixture("person_3873197.json"));
+            var client = new KinopoiskApiClient(
+                "test-token", NullLogger<KinopoiskApiClient>.Instance, new SingleHandlerClientFactory(handler));
 
-            var trailers = await client.GetTrailers(301);
+            await client.GetPerson(3873197);
+            await client.GetPerson(3873197);
+            await client.GetPerson(3873197);
 
-            Assert.Equal(2, trailers.Count);
-            Assert.Equal("https://www.youtube.com/embed/abc", trailers[0].Url);
-            Assert.Equal("youtube", trailers[0].Site);
-            Assert.Equal(new[] { "/v1.5/movie?id=301&selectFields=id&selectFields=videos&limit=1" }, handler.Requests);
+            var times = handler.Times;
+            Assert.Equal(3, times.Count);
+            Assert.True((times[1] - times[0]).TotalMilliseconds >= 200, "the second request came too soon");
+            Assert.True((times[2] - times[1]).TotalMilliseconds >= 200, "the third request came too soon");
         }
 
         [Fact]
-        public async Task GetTrailers_ReturnsNothingWhenThereAreNone()
+        public async Task RateLimitedRequestWaitsForTheAnnouncedReset()
         {
-            var (client, _, _) = Create(_ => FakeResponse.Ok("{\"docs\":[{\"id\":301}],\"hasNext\":false}"));
+            var attempts = 0;
+            var tokenWithRequestsLeft = "{\"requestsLimit\":200,\"requestsUsed\":14,\"requestsRemaining\":186,\"ttl\":42779}";
+            var handler = new RoutingHandler(target =>
+            {
+                if (target == "/v1.5/token")
+                    return FakeResponse.Ok(tokenWithRequestsLeft);
+                if (++attempts > 1)
+                    return FakeResponse.Fixture("person_3873197.json");
+                var limited = FakeResponse.Error(429);
+                limited.Headers["x-ratelimit-limit"] = "5";
+                limited.Headers["x-ratelimit-remaining"] = "0";
+                limited.Headers["x-ratelimit-reset"] = "1";
+                return limited;
+            });
+            var client = new KinopoiskApiClient(
+                "test-token", NullLogger<KinopoiskApiClient>.Instance, new SingleHandlerClientFactory(handler), requestInterval: TimeSpan.Zero);
 
-            Assert.Empty(await client.GetTrailers(301));
+            var person = await client.GetPerson(3873197);
+
+            Assert.Equal("Ирина Старшенбаум", person.Name);
+            var movieTimes = handler.Requests.Select((request, index) => (request, time: handler.Times[index]))
+                .Where(entry => entry.request.StartsWith("/v1.5/person/")).Select(entry => entry.time).ToArray();
+            Assert.Equal(2, movieTimes.Length);
+            Assert.True((movieTimes[1] - movieTimes[0]).TotalMilliseconds >= 900, "the retry did not wait for the reset");
         }
 
         [Fact]

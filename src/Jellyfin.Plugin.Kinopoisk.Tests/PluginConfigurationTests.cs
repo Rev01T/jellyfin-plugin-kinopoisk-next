@@ -19,7 +19,6 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
             // The free token has a daily limit of 200 requests: only the card of a title is requested by default.
             var configuration = new PluginConfiguration();
 
-            Assert.False(configuration.LoadTrailers);
             Assert.False(configuration.LoadPersonDetails);
             Assert.Equal(PremiereDateSource.World, configuration.PremiereDateSource);
         }

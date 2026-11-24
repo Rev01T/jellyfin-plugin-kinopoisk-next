@@ -16,11 +16,6 @@ namespace KinopoiskUnofficialInfo.ApiClient
         Task<MovieDto> GetMovie(int movieId, CancellationToken? cancellationToken = null);
 
         /// <summary>
-        /// Trailers of a title. Costs one extra request: they are not part of the full card.
-        /// </summary>
-        Task<IReadOnlyList<VideoDto>> GetTrailers(int movieId, CancellationToken? cancellationToken = null);
-
-        /// <summary>
         /// Titles with the given IMDb ID.
         /// </summary>
         Task<IReadOnlyList<MovieDto>> FindMoviesByImdbId(string imdbId, CancellationToken? cancellationToken = null);

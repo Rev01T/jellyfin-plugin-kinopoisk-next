@@ -38,7 +38,7 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
 
             Assert.True(result.HasMetadata);
             Assert.Equal("Аватар", result.Item.Name);
-            // Cast, crew and premiere dates come with the card: no more requests, no trailers, no people.
+            // Cast, crew and premiere dates come with the card: no more requests.
             Assert.Equal(1, api.TotalRequests);
             Assert.Equal(1, api.MovieRequests);
             // 88 people in the card, 14 of them dubbing actors, 17 more without a photo.

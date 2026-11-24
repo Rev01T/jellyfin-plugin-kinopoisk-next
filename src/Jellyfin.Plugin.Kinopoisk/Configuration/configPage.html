@@ -30,14 +30,6 @@
 
                     <div class="checkboxContainer checkboxContainer-withDescription">
                         <label class="emby-checkbox-label">
-                            <input is="emby-checkbox" type="checkbox" id="LoadTrailers" name="LoadTrailers" />
-                            <span>Загружать трейлеры</span>
-                        </label>
-                        <div class="fieldDescription checkboxFieldDescription">Один дополнительный запрос к API на каждый фильм или сериал.</div>
-                    </div>
-
-                    <div class="checkboxContainer checkboxContainer-withDescription">
-                        <label class="emby-checkbox-label">
                             <input is="emby-checkbox" type="checkbox" id="LoadPersonDetails" name="LoadPersonDetails" />
                             <span>Загружать подробные данные персон</span>
                         </label>
@@ -70,7 +62,6 @@
                 ApiClient.getPluginConfiguration(KinopoiskPluginConfig.pluginUniqueId).then(function (config) {
                     $('#ApiToken').val(config.ApiToken).change();
                     $('#PremiereDateSource').val(KinopoiskPluginConfig.premiereDateSourceName(config.PremiereDateSource));
-                    $('#LoadTrailers').prop('checked', config.LoadTrailers === true);
                     $('#LoadPersonDetails').prop('checked', config.LoadPersonDetails === true);
                     Dashboard.hideLoadingMsg();
                 });
@@ -81,7 +72,6 @@
                 ApiClient.getPluginConfiguration(KinopoiskPluginConfig.pluginUniqueId).then(function (config) {
                     config.ApiToken = $('#ApiToken').val();
                     config.PremiereDateSource = $('#PremiereDateSource').val();
-                    config.LoadTrailers = $('#LoadTrailers').prop('checked');
                     config.LoadPersonDetails = $('#LoadPersonDetails').prop('checked');
                     ApiClient.updatePluginConfiguration(KinopoiskPluginConfig.pluginUniqueId, config).then(function (result) {
                         Dashboard.processPluginConfigurationUpdateResult(result);

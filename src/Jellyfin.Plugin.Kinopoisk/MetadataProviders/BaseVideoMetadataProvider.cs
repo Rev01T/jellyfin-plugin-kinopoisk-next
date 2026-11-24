@@ -72,19 +72,6 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             foreach (var item in sanitizedPersons ?? Enumerable.Empty<PersonInfo>())
                 result.AddPerson(item);
 
-            // Trailers are not in the card: one more request, so it is optional.
-            if (Plugin.Instance?.Configuration?.LoadTrailers == true && result.Item is not null)
-            {
-                var trailers = await TryOptional(
-                    () => _apiClient.GetTrailers(kinopoiskId, cancellationToken),
-                    "trailers",
-                    kinopoiskId,
-                    cancellationToken).ConfigureAwait(false);
-                var remoteTrailers = trailers.ToMediaUrls();
-                if (remoteTrailers is not null)
-                    result.Item.RemoteTrailers = remoteTrailers;
-            }
-
             return result;
         }
 

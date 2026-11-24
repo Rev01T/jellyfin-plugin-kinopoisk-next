@@ -23,7 +23,8 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
                 "test-token",
                 NullLogger<KinopoiskApiClient>.Instance,
                 new SingleHandlerClientFactory(handler),
-                clock);
+                clock,
+                requestInterval: TimeSpan.Zero);
 
         [Fact]
         public async Task ExhaustedQuota_PausesRequestsUntilTheReset()

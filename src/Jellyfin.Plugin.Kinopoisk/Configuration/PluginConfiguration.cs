@@ -12,8 +12,5 @@ namespace Jellyfin.Plugin.Kinopoisk.Configuration
 
         // Request the details of every person (birth date and place): one API request per person.
         public bool LoadPersonDetails { get; set; } = false;
-
-        // Request the trailers of every title: one extra API request per title.
-        public bool LoadTrailers { get; set; } = false;
     }
 }
