@@ -51,10 +51,10 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
         }
 
         public Task<IReadOnlyList<MovieDto>> FindMoviesByImdbId(string imdbId, CancellationToken? cancellationToken = null)
-            => throw new NotImplementedException();
+            => Respond<IReadOnlyList<MovieDto>>(() => new List<MovieDto>());
 
         public Task<SearchResponse<MovieDto>> SearchMovies(string query, int page = 1, CancellationToken? cancellationToken = null)
-            => throw new NotImplementedException();
+            => Respond(() => new SearchResponse<MovieDto>());
 
         public Task<TokenInfoDto> GetTokenInfo(CancellationToken? cancellationToken = null)
             => throw new NotImplementedException();

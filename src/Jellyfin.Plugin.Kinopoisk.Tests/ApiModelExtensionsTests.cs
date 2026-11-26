@@ -157,12 +157,32 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
             Assert.Equal(60f, movie.GetCriticRating());
         }
 
-        [Fact]
-        public void RussianCriticsRatingKeepsFractionalPercentage()
+        [Theory]
+        [InlineData(85.7143, 86f)]
+        [InlineData(16.6667, 17f)]
+        [InlineData(76.9231, 77f)]
+        [InlineData(84.5, 85f)]
+        [InlineData(60.0, 60f)]
+        public void CriticRatingIsAWholeNumber(double input, float expected)
         {
-            var movie = new MovieDto { Rating = new RatingDto { RussianFilmCritics = 16.6667 } };
+            var movie = new MovieDto { Rating = new RatingDto { RussianFilmCritics = input } };
 
-            Assert.Equal(16.6667f, movie.GetCriticRating());
+            Assert.Equal(expected, movie.GetCriticRating());
+        }
+
+        [Theory]
+        [InlineData(7.416, 7.4f)]
+        [InlineData(7.084, 7.1f)]
+        [InlineData(8.501, 8.5f)]
+        [InlineData(7.45, 7.5f)]
+        [InlineData(8.0, 8.0f)]
+        [InlineData(10.0, 10.0f)]
+        public void CommunityRatingHasOneDecimal(double input, float expected)
+        {
+            var movie = new MovieDto { Rating = new RatingDto { Kp = input } };
+
+            Assert.Equal(expected, movie.GetCommunityRating());
+            Assert.Equal(expected, movie.ToMovie().CommunityRating);
         }
 
         [Fact]
@@ -220,7 +240,7 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
         [Fact]
         public void CommunityRatingFallsBackToImdb()
         {
-            Assert.Equal(8.01f, new MovieDto { Rating = new RatingDto { Kp = 8.01, Imdb = 7.9 } }.ToMovie().CommunityRating);
+            Assert.Equal(8.0f, new MovieDto { Rating = new RatingDto { Kp = 8.01, Imdb = 7.9 } }.ToMovie().CommunityRating);
             Assert.Equal(7.9f, new MovieDto { Rating = new RatingDto { Kp = 0, Imdb = 7.9 } }.ToMovie().CommunityRating);
             Assert.Null(new MovieDto { Rating = new RatingDto() }.ToMovie().CommunityRating);
         }

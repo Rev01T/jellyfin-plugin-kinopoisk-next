@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -12,11 +13,11 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
     /// </summary>
     public class QuotaTests
     {
-        private const string TokenWithRequestsLeft = "{\"requestsLimit\":200,\"requestsUsed\":14,\"requestsRemaining\":186,\"ttl\":42779,\"resetAt\":\"2026-11-20T20:59:59.723Z\"}";
-        private const string TokenExhausted = "{\"requestsLimit\":200,\"requestsUsed\":200,\"requestsRemaining\":0,\"ttl\":32399,\"resetAt\":\"2026-11-20T20:59:59.723Z\"}";
+        private const string TokenWithRequestsLeft = "{\"requestsLimit\":200,\"requestsUsed\":14,\"requestsRemaining\":186,\"ttl\":42779,\"resetAt\":\"2026-11-25T20:59:59.920Z\"}";
+        private const string TokenExhausted = "{\"requestsLimit\":200,\"requestsUsed\":200,\"requestsRemaining\":0,\"ttl\":72149,\"resetAt\":\"2026-11-25T20:59:59.920Z\"}";
         private const string Movie = "{\"id\":301,\"name\":\"Матрица\"}";
 
-        private static readonly DateTimeOffset Noon = new DateTimeOffset(2026, 11, 20, 12, 0, 0, TimeSpan.Zero);
+        private static readonly DateTimeOffset Noon = new DateTimeOffset(2026, 11, 25, 12, 0, 0, TimeSpan.Zero);
 
         private static KinopoiskApiClient CreateClient(RoutingHandler handler, Func<DateTimeOffset> clock)
             => new KinopoiskApiClient(
@@ -32,8 +33,8 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
             var now = Noon;
             var exhausted = true;
             var handler = new RoutingHandler(target =>
-                target == "/v1.5/token" ? FakeResponse.Ok(exhausted ? TokenExhausted : TokenWithRequestsLeft)
-                : exhausted ? FakeResponse.Error(403, "{\"message\":\"Daily limit\"}")
+                target == "/v1.5/token" ? FakeResponse.Ok(exhausted ? Fixtures.Read("token_exhausted.json") : TokenWithRequestsLeft)
+                : exhausted ? FakeResponse.Error(403, Fixtures.Read("quota_exceeded.json"))
                 : FakeResponse.Ok(Movie));
             var client = CreateClient(handler, () => now);
 
@@ -43,7 +44,7 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
             Assert.True(first.IsQuotaExceeded);
             Assert.Equal(403, first.StatusCode);
             Assert.True(second.IsQuotaExceeded);
-            Assert.Contains("2026-11-20 21:00:04Z", second.Message);
+            Assert.Contains("2026-11-25 21:00:04Z", second.Message);
             // The second call did not reach the API.
             Assert.Equal(1, handler.Count("/v1.5/movie/301"));
             Assert.Equal(0, handler.Count("/v1.5/movie/302"));
@@ -53,20 +54,58 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
             Assert.Equal(0, (await client.GetTokenInfo()).RequestsRemaining);
 
             // Still paused one second before the reset...
-            now = new DateTimeOffset(2026, 11, 20, 20, 59, 59, TimeSpan.Zero);
+            now = new DateTimeOffset(2026, 11, 25, 20, 59, 59, TimeSpan.Zero);
             await Assert.ThrowsAsync<ApiException>(() => client.GetMovie(303));
             Assert.Equal(0, handler.Count("/v1.5/movie/303"));
 
             // ...and working again right after it.
             exhausted = false;
-            now = new DateTimeOffset(2026, 11, 20, 21, 0, 10, TimeSpan.Zero);
+            now = new DateTimeOffset(2026, 11, 25, 21, 0, 10, TimeSpan.Zero);
             Assert.Equal("Матрица", (await client.GetMovie(304)).Name);
+        }
+
+        [Fact]
+        public async Task SkippedRequestsAreNotLoggedOneByOne()
+        {
+            var now = Noon;
+            var logger = new ListLogger<KinopoiskApiClient>();
+            var handler = new RoutingHandler(target =>
+                target == "/v1.5/token" ? FakeResponse.Ok(TokenExhausted) : FakeResponse.Error(403, Fixtures.Read("quota_exceeded.json")));
+            var client = new KinopoiskApiClient("test-token", logger, new SingleHandlerClientFactory(handler), () => now, requestInterval: TimeSpan.Zero);
+
+            await Assert.ThrowsAsync<ApiException>(() => client.GetMovie(1000));
+            for (var id = 1001; id < 1101; id++)
+                await Assert.ThrowsAsync<ApiException>(() => client.GetMovie(id));
+
+            // One warning when the limit was found exhausted, none for the 100 skipped requests.
+            Assert.Equal(1, logger.Entries.Count(entry => entry.Level == Microsoft.Extensions.Logging.LogLevel.Warning));
+
+            // A reminder after a while: the limit is still exhausted.
+            now = Noon.AddMinutes(11);
+            await Assert.ThrowsAsync<ApiException>(() => client.GetMovie(2000));
+            await Assert.ThrowsAsync<ApiException>(() => client.GetMovie(2001));
+            Assert.Equal(2, logger.Entries.Count(entry => entry.Level == Microsoft.Extensions.Logging.LogLevel.Warning));
+        }
+
+        [Fact]
+        public async Task TheRecordedExhaustedQuotaAnswerIsRecognised()
+        {
+            // The real answer: HTTP 403 with this body while GET /v1.5/token reports no requests left.
+            var handler = new RoutingHandler(target =>
+                target == "/v1.5/token" ? FakeResponse.Fixture("token_exhausted.json") : FakeResponse.Error(403, Fixtures.Read("quota_exceeded.json")));
+            var client = CreateClient(handler, () => Noon);
+
+            var exception = await Assert.ThrowsAsync<ApiException>(() => client.GetMovie(591964));
+
+            Assert.True(exception.IsQuotaExceeded);
+            Assert.Equal(403, exception.StatusCode);
+            Assert.Contains("Вы израсходовали", exception.Response);
         }
 
         [Fact]
         public async Task QuotaStillReportedExhaustedAfterTheReset_PausesBrieflyOnly()
         {
-            var now = new DateTimeOffset(2026, 11, 20, 21, 0, 30, TimeSpan.Zero);
+            var now = new DateTimeOffset(2026, 11, 25, 21, 0, 30, TimeSpan.Zero);
             var handler = new RoutingHandler(target =>
                 target == "/v1.5/token" ? FakeResponse.Ok(TokenExhausted) : FakeResponse.Error(403));
             var client = CreateClient(handler, () => now);
@@ -74,7 +113,7 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
             var exception = await Assert.ThrowsAsync<ApiException>(() => client.GetMovie(301));
 
             Assert.True(exception.IsQuotaExceeded);
-            Assert.Contains("2026-11-20 21:01:30Z", exception.Message);
+            Assert.Contains("2026-11-25 21:01:30Z", exception.Message);
         }
 
         [Fact]
@@ -220,12 +259,12 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
 
     public class KinopoiskQuotaTests
     {
-        private static readonly DateTimeOffset Noon = new DateTimeOffset(2026, 11, 20, 12, 0, 0, TimeSpan.Zero);
+        private static readonly DateTimeOffset Noon = new DateTimeOffset(2026, 11, 25, 12, 0, 0, TimeSpan.Zero);
 
         [Fact]
         public void PauseLastsUntilTheAnnouncedReset()
         {
-            var resetAt = new DateTimeOffset(2026, 11, 20, 20, 59, 59, 723, TimeSpan.Zero);
+            var resetAt = new DateTimeOffset(2026, 11, 25, 20, 59, 59, 723, TimeSpan.Zero);
 
             var until = KinopoiskQuota.BlockedUntil(Noon, resetAt, 32399);
 
@@ -266,12 +305,12 @@ namespace KinopoiskUnofficialInfo.ApiClient.Tests
         [Fact]
         public void ResetTimeIsReadAsUtc()
         {
-            var utc = new DateTime(2026, 11, 20, 20, 59, 59, DateTimeKind.Utc);
-            var unspecified = new DateTime(2026, 11, 20, 20, 59, 59, DateTimeKind.Unspecified);
+            var utc = new DateTime(2026, 11, 25, 20, 59, 59, DateTimeKind.Utc);
+            var unspecified = new DateTime(2026, 11, 25, 20, 59, 59, DateTimeKind.Unspecified);
 
             Assert.Null(KinopoiskQuota.ToResetTime(null));
-            Assert.Equal(new DateTimeOffset(2026, 11, 20, 20, 59, 59, TimeSpan.Zero), KinopoiskQuota.ToResetTime(utc));
-            Assert.Equal(new DateTimeOffset(2026, 11, 20, 20, 59, 59, TimeSpan.Zero), KinopoiskQuota.ToResetTime(unspecified));
+            Assert.Equal(new DateTimeOffset(2026, 11, 25, 20, 59, 59, TimeSpan.Zero), KinopoiskQuota.ToResetTime(utc));
+            Assert.Equal(new DateTimeOffset(2026, 11, 25, 20, 59, 59, TimeSpan.Zero), KinopoiskQuota.ToResetTime(unspecified));
         }
     }
 }

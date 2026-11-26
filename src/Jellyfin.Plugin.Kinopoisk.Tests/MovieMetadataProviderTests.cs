@@ -127,5 +127,43 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
             Assert.Equal(1, api.TotalRequests);
             Assert.Equal(0, api.PersonRequests);
         }
+
+        private static ApiException QuotaExceeded()
+            => new ApiException("daily limit", 403, string.Empty, isQuotaExceeded: true);
+
+        [Fact]
+        public async Task ExhaustedQuotaGivesNoMetadataInsteadOfAnError()
+        {
+            // Jellyfin logs an exception from a provider as an error with a stack trace for every title.
+            var api = new FakeApiClient { Failure = QuotaExceeded() };
+            var provider = new MovieMetadataProvider(
+                api, new FixedIdResolver<MovieInfo>(251733), NullLogger<MovieMetadataProvider>.Instance, new FakeHttpClientFactory());
+
+            var result = await provider.GetMetadata(new MovieInfo(), CancellationToken.None);
+
+            Assert.False(result.HasMetadata);
+            Assert.Null(result.Item);
+        }
+
+        [Fact]
+        public async Task ExhaustedQuotaGivesNoSearchResultsInsteadOfAnError()
+        {
+            var api = new FakeApiClient { Failure = QuotaExceeded() };
+            var provider = new MovieMetadataProvider(
+                api, new FixedIdResolver<MovieInfo>(251733), NullLogger<MovieMetadataProvider>.Instance, new FakeHttpClientFactory());
+
+            Assert.Empty(await provider.GetSearchResults(new MovieInfo { Name = "Аватар" }, CancellationToken.None));
+            Assert.Empty(await provider.GetSearchResults(new MovieInfo { Name = "kp-251733" }, CancellationToken.None));
+        }
+
+        [Fact]
+        public async Task OtherApiErrorsAreStillReported()
+        {
+            var api = new FakeApiClient { Failure = new ApiException("server error", 500, string.Empty) };
+            var provider = new MovieMetadataProvider(
+                api, new FixedIdResolver<MovieInfo>(251733), NullLogger<MovieMetadataProvider>.Instance, new FakeHttpClientFactory());
+
+            await Assert.ThrowsAsync<ApiException>(() => provider.GetMetadata(new MovieInfo(), CancellationToken.None));
+        }
     }
 }

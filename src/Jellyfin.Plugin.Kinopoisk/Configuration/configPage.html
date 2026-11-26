@@ -23,9 +23,9 @@
                         <select is="emby-select" id="PremiereDateSource" name="PremiereDateSource" class="emby-select-withcolor emby-select">
                             <option value="World">Мировая премьера</option>
                             <option value="Russia">Российская премьера (кинопрокат)</option>
-                            <option value="YearOnly">Только год выпуска</option>
+                            <option value="YearOnly">Только год выпуска (дата выхода не заполняется)</option>
                         </select>
-                        <div class="fieldDescription">Даты входят в карточку фильма, поэтому дополнительные запросы к API не нужны. Если российской даты нет, берётся мировая; если нет никакой даты, берётся 1 января года выпуска.</div>
+                        <div class="fieldDescription">Даты входят в карточку фильма, поэтому дополнительные запросы к API не нужны. Если российской даты нет, берётся мировая; если нет никакой даты, дата выхода остаётся пустой (год выпуска записывается в любом случае).</div>
                     </div>
 
                     <div class="checkboxContainer checkboxContainer-withDescription">

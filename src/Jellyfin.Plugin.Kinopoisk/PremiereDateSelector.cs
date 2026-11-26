@@ -11,24 +11,23 @@ namespace Jellyfin.Plugin.Kinopoisk
     public static class PremiereDateSelector
     {
         /// <summary>
-        /// The premiere date according to the plugin setting. When the card has no suitable date
-        /// (or the setting is <see cref="PremiereDateSource.YearOnly"/>), it is January 1 of the production year.
+        /// The premiere date according to the plugin setting. Null when the setting is
+        /// <see cref="PremiereDateSource.YearOnly"/> or the card has no premiere date: a date is never
+        /// made up from the year (it would show as January 1). The year is stored separately, in the
+        /// production year of the item.
         /// </summary>
         public static DateTime? Select(MovieDto movie, PremiereDateSource source)
         {
             if (movie is null)
                 return null;
 
-            if (source != PremiereDateSource.YearOnly && movie.Premiere != null)
-            {
-                var date = source == PremiereDateSource.Russia
-                    ? SelectRussian(movie.Premiere) ?? SelectWorld(movie.Premiere)
-                    : SelectWorld(movie.Premiere);
-                if (date.HasValue)
-                    return date.Value.Date;
-            }
+            if (source == PremiereDateSource.YearOnly || movie.Premiere is null)
+                return null;
 
-            return movie.Year > 1900 ? new DateTime(movie.Year.Value, 1, 1) : (DateTime?)null;
+            var date = source == PremiereDateSource.Russia
+                ? SelectRussian(movie.Premiere) ?? SelectWorld(movie.Premiere)
+                : SelectWorld(movie.Premiere);
+            return date?.Date;
         }
 
         // The world premiere, or the earliest known date when it is missing. Re-releases are ignored:

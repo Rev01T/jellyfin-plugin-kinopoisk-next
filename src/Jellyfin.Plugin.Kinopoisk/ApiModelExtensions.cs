@@ -119,11 +119,7 @@ namespace Jellyfin.Plugin.Kinopoisk
             if (length > 0)
                 dst.RunTimeTicks = TimeSpan.FromMinutes(length.Value).Ticks;
 
-            dst.CommunityRating = (float)(src.Rating?.Kp ?? 0.0);
-            if (dst.CommunityRating < 0.1)
-                dst.CommunityRating = (float)(src.Rating?.Imdb ?? 0.0);
-            if (dst.CommunityRating < 0.1)
-                dst.CommunityRating = null;
+            dst.CommunityRating = src.GetCommunityRating();
             dst.CriticRating = src.GetCriticRating();
 
             if (!string.IsNullOrWhiteSpace(src.ExternalId?.Imdb))
@@ -131,7 +127,23 @@ namespace Jellyfin.Plugin.Kinopoisk
         }
 
         /// <summary>
-        /// Jellyfin's CriticRating is a 0-100 score (the web client shows it as a percentage).
+        /// Jellyfin's CommunityRating is a 0-10 score with one decimal: the Kinopoisk rating, or the IMDb
+        /// rating when there is none. The API returns three decimals (7.416).
+        /// </summary>
+        public static float? GetCommunityRating(this MovieDto src)
+        {
+            var value = src?.Rating?.Kp ?? 0.0;
+            if (value < 0.1)
+                value = src?.Rating?.Imdb ?? 0.0;
+            if (value < 0.1)
+                return null;
+
+            return (float)Math.Round(Math.Min(value, 10.0), 1, MidpointRounding.AwayFromZero);
+        }
+
+        /// <summary>
+        /// Jellyfin's CriticRating is a whole 0-100 score (the web client shows it as a percentage).
+        /// The API returns fractions (85.7143), they are rounded.
         /// </summary>
         public static float? GetCriticRating(this MovieDto src)
         {
@@ -142,7 +154,7 @@ namespace Jellyfin.Plugin.Kinopoisk
             // russianFilmCritics is already a percentage of positive reviews: the API returns 60
             // for the "60%" shown on the Kinopoisk page.
             if (rating.RussianFilmCritics > 0.0)
-                return (float)Math.Min(rating.RussianFilmCritics.Value, 100.0);
+                return RoundPercentage(rating.RussianFilmCritics.Value);
 
             // filmCritics is a 0-10 score. A value above 10 can only be a
             // percentage, so it is kept as is instead of being multiplied by ten again.
@@ -151,11 +163,14 @@ namespace Jellyfin.Plugin.Kinopoisk
                 var value = rating.FilmCritics.Value <= 10.0
                     ? rating.FilmCritics.Value * 10.0
                     : rating.FilmCritics.Value;
-                return (float)Math.Min(value, 100.0);
+                return RoundPercentage(value);
             }
 
             return null;
         }
+
+        private static float RoundPercentage(double value)
+            => (float)Math.Round(Math.Min(value, 100.0), 0, MidpointRounding.AwayFromZero);
 
         public static string NormalizeOfficialRating(int? ageLimit, string mpaa)
         {

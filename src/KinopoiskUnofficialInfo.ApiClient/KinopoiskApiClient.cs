@@ -20,6 +20,7 @@ namespace KinopoiskUnofficialInfo.ApiClient
         private static readonly TimeSpan DefaultRequestInterval = TimeSpan.FromMilliseconds(250);
         private static readonly TimeSpan DefaultRetryDelay = TimeSpan.FromSeconds(1);
         private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(5);
+        private static readonly TimeSpan QuotaReminderInterval = TimeSpan.FromMinutes(10);
         private static readonly Regex IdSegment = new Regex(@"/\d+", RegexOptions.Compiled);
 
         private readonly ILogger<KinopoiskApiClient> _logger;
@@ -30,6 +31,7 @@ namespace KinopoiskUnofficialInfo.ApiClient
         private readonly Func<DateTimeOffset> _utcNow;
         private readonly object _quotaLock = new object();
         private DateTimeOffset _quotaBlockedUntil = DateTimeOffset.MinValue;
+        private DateTimeOffset _quotaLastReported = DateTimeOffset.MinValue;
         private readonly SemaphoreSlim _requestStartLock = new SemaphoreSlim(1, 1);
         private DateTimeOffset _nextRequestAt = DateTimeOffset.MinValue;
 
@@ -174,12 +176,25 @@ namespace KinopoiskUnofficialInfo.ApiClient
         private void ThrowIfPaused()
         {
             DateTimeOffset until;
+            var remind = false;
             lock (_quotaLock)
             {
-                if (_utcNow() >= _quotaBlockedUntil)
+                var now = _utcNow();
+                if (now >= _quotaBlockedUntil)
                     return;
                 until = _quotaBlockedUntil;
+
+                // The skipped requests are not logged one by one (a library scan has hundreds),
+                // but a reminder from time to time tells why nothing is loaded.
+                if (now - _quotaLastReported >= QuotaReminderInterval)
+                {
+                    _quotaLastReported = now;
+                    remind = true;
+                }
             }
+
+            if (remind)
+                _logger.LogWarning("poiskkino.dev daily request limit is exhausted: requests are paused until {BlockedUntil:u}.", until);
 
             throw new ApiException(
                 $"poiskkino.dev daily request limit exceeded. Requests are paused until {until:u}.",
@@ -309,6 +324,8 @@ namespace KinopoiskUnofficialInfo.ApiClient
                 {
                     shouldLog = now >= _quotaBlockedUntil;
                     _quotaBlockedUntil = until;
+                    if (shouldLog)
+                        _quotaLastReported = now;
                 }
             }
 

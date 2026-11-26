@@ -34,7 +34,7 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
             var movie = Movie(new PremiereDto { Rerelease = Utc(2019, 1, 1), Russia = Utc(2020, 3, 1) });
 
             Assert.Equal(new DateTime(2020, 3, 1), PremiereDateSelector.Select(movie, PremiereDateSource.World));
-            Assert.Equal(new DateTime(2020, 1, 1), PremiereDateSelector.Select(Movie(new PremiereDto { Rerelease = Utc(2019, 1, 1) }), PremiereDateSource.World));
+            Assert.Null(PremiereDateSelector.Select(Movie(new PremiereDto { Rerelease = Utc(2019, 1, 1) }), PremiereDateSource.World));
         }
 
         [Fact]
@@ -54,18 +54,19 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
         }
 
         [Fact]
-        public void YearOnlySourceIgnoresThePremiereDates()
+        public void YearOnlySourceLeavesTheDateEmpty()
         {
+            // Only the production year is stored: a date made up as January 1 would be wrong.
             var movie = Movie(new PremiereDto { World = Utc(2019, 12, 20) }, 2020);
 
-            Assert.Equal(new DateTime(2020, 1, 1), PremiereDateSelector.Select(movie, PremiereDateSource.YearOnly));
+            Assert.Null(PremiereDateSelector.Select(movie, PremiereDateSource.YearOnly));
         }
 
         [Fact]
-        public void FallsBackToTheYearWithoutPremiereDates()
+        public void LeavesTheDateEmptyWithoutPremiereDates()
         {
-            Assert.Equal(new DateTime(2020, 1, 1), PremiereDateSelector.Select(Movie(null), PremiereDateSource.World));
-            Assert.Equal(new DateTime(2020, 1, 1), PremiereDateSelector.Select(Movie(new PremiereDto()), PremiereDateSource.Russia));
+            Assert.Null(PremiereDateSelector.Select(Movie(null), PremiereDateSource.World));
+            Assert.Null(PremiereDateSelector.Select(Movie(new PremiereDto()), PremiereDateSource.Russia));
         }
 
         [Fact]

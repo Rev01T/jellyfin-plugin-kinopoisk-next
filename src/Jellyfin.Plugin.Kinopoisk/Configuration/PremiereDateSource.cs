@@ -17,7 +17,7 @@ namespace Jellyfin.Plugin.Kinopoisk.Configuration
         Russia = 1,
 
         /// <summary>
-        /// The premiere date is January 1 of the production year.
+        /// The premiere date is left empty: only the production year is stored.
         /// </summary>
         YearOnly = 2
     }
