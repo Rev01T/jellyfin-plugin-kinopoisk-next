@@ -27,8 +27,8 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
             Assert.Equal("Это новый мир", movie.Tagline);
             Assert.Equal("12+", movie.OfficialRating);
             Assert.Equal(TimeSpan.FromMinutes(162).Ticks, movie.RunTimeTicks);
-            Assert.Equal(8.01f, movie.CommunityRating);
-            Assert.Equal(76.9231f, movie.CriticRating);
+            Assert.Equal(8.0f, movie.CommunityRating);
+            Assert.Equal(77f, movie.CriticRating);
             Assert.Equal(new[] { "США", "Великобритания" }, movie.ProductionLocations);
             Assert.Equal(new[] { "Фантастика", "Боевик", "Драма", "Приключения" }, movie.Genres);
             Assert.StartsWith("Бывший морпех", movie.Overview);
@@ -41,7 +41,9 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
 
             Assert.Equal(new DateTime(2009, 12, 10), film.ToMovie(PremiereDateSource.World).PremiereDate);
             Assert.Equal(new DateTime(2009, 12, 17), film.ToMovie(PremiereDateSource.Russia).PremiereDate);
-            Assert.Equal(new DateTime(2009, 1, 1), film.ToMovie(PremiereDateSource.YearOnly).PremiereDate);
+            // Only the year is stored: no made-up January 1.
+            Assert.Null(film.ToMovie(PremiereDateSource.YearOnly).PremiereDate);
+            Assert.Equal(2009, film.ToMovie(PremiereDateSource.YearOnly).ProductionYear);
         }
 
         [Theory]
@@ -88,7 +90,7 @@ namespace Jellyfin.Plugin.Kinopoisk.Tests
             Assert.Null(series.EndDate);
             Assert.Equal("18+", series.OfficialRating);
             // Only Kinopoisk and TMDB rated it.
-            Assert.Equal(7.084f, series.CommunityRating);
+            Assert.Equal(7.1f, series.CommunityRating);
             Assert.Null(series.CriticRating);
         }
 

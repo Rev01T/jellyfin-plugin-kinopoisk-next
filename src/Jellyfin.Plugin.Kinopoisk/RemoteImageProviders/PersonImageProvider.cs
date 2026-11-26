@@ -51,8 +51,15 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             }
             else if (Plugin.Instance?.Configuration?.LoadPersonDetails == true)
             {
-                var person = await _apiClient.GetPerson(kinopoiskId, cancellationToken);
-                image = person.ToRemoteImageInfo();
+                try
+                {
+                    var person = await _apiClient.GetPerson(kinopoiskId, cancellationToken);
+                    image = person.ToRemoteImageInfo();
+                }
+                catch (ApiException e) when (e.IsQuotaExceeded)
+                {
+                    _logger.LogDebug("The photo of the person {KinopoiskId} was not loaded: {Error}", kinopoiskId, e.Message);
+                }
             }
 
             if (image is null)

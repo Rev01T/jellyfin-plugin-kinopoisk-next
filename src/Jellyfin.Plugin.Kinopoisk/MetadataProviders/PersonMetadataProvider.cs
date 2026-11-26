@@ -44,7 +44,16 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
             if (!resolveResult)
                 return result;
 
-            var person = await _apiClient.GetPerson(kinopoiskId, cancellationToken);
+            PersonDto person;
+            try
+            {
+                person = await _apiClient.GetPerson(kinopoiskId, cancellationToken);
+            }
+            catch (ApiException e) when (e.IsQuotaExceeded)
+            {
+                _logger.LogDebug("Details of the person {KinopoiskId} were not loaded: {Error}", kinopoiskId, e.Message);
+                return result;
+            }
 
             cancellationToken.ThrowIfCancellationRequested();
 

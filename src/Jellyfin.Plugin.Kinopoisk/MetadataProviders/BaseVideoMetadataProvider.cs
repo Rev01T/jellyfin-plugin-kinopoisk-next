@@ -46,12 +46,25 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
                 ResultLanguage = Constants.ProviderMetadataLanguage
             };
 
-            var (resolveResult, kinopoiskId) = await _providerIdResolver.TryResolve(info, cancellationToken);
-            if (!resolveResult)
-                return result;
+            int kinopoiskId;
+            MovieDto movie;
+            try
+            {
+                bool resolved;
+                (resolved, kinopoiskId) = await _providerIdResolver.TryResolve(info, cancellationToken);
+                if (!resolved)
+                    return result;
 
-            // One request: the card contains the cast and crew, the premiere dates and the poster too.
-            var movie = await _apiClient.GetMovie(kinopoiskId, cancellationToken);
+                // One request: the card contains the cast and crew, the premiere dates and the poster too.
+                movie = await _apiClient.GetMovie(kinopoiskId, cancellationToken);
+            }
+            catch (ApiException e) when (e.IsQuotaExceeded)
+            {
+                // The client has already reported the exhausted limit: nothing to load until it is reset.
+                _logger.LogDebug("Metadata of '{Name}' was not loaded: {Error}", info?.Name, e.Message);
+                return result;
+            }
+
             cancellationToken.ThrowIfCancellationRequested();
             if (movie is null)
                 return result;
@@ -106,6 +119,20 @@ namespace Jellyfin.Plugin.Kinopoisk.MetadataProviders
         }
 
         public async Task<IEnumerable<RemoteSearchResult>> GetSearchResults(TLookupInfoType searchInfo, CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await Search(searchInfo, cancellationToken).ConfigureAwait(false);
+            }
+            catch (ApiException e) when (e.IsQuotaExceeded)
+            {
+                // Nothing can be found until the limit is reset: an empty list instead of an error in the log.
+                _logger.LogDebug("Search for '{Name}' was skipped: {Error}", searchInfo?.Name, e.Message);
+                return Enumerable.Empty<RemoteSearchResult>();
+            }
+        }
+
+        private async Task<IEnumerable<RemoteSearchResult>> Search(TLookupInfoType searchInfo, CancellationToken cancellationToken)
         {
             if (searchInfo.TryGetProviderId(Constants.ProviderId, out var kinopoiskIdStr)
                 && int.TryParse(kinopoiskIdStr, out var kinopoiskId))
